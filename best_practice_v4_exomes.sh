@@ -307,8 +307,6 @@ do
 done
 waitForJobs
 
-fi
-
 echo "***************"
 echo "Variant Calling"
 echo "***************"
@@ -331,15 +329,17 @@ $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	2>$TARGET_DIR/calls/logs/all.merge.err.log &
 waitForJobs
 
+fi
+
 echo "Calling Variants"
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-	-T HaplotypeCaller \
+	-T UnifiedGenotyper \
 	-I $TARGET_DIR/calls/all.bam \
 	-o $TARGET_DIR/calls/all.raw.vcf \
 	-R $REF_FASTA \
 	--dbsnp $REF_DBSNP \
-	>$TARGET_DIR/calls/logs/all.haplotypeCaller.log \
-	2>$TARGET_DIR/calls/logs/all.haplotypeCaller.err.log &
+	>$TARGET_DIR/calls/logs/all.unifiedGenotyper.log \
+	2>$TARGET_DIR/calls/logs/all.unifiedGenotyper.err.log &
 waitForJobs
 
 echo "Separating SNPs, INDELs for filtering"
