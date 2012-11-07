@@ -331,41 +331,59 @@ waitForJobs
 
 fi
 
-echo "Calling Variants"
-$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-	-T UnifiedGenotyper \
-	-I $TARGET_DIR/calls/all.bam \
-	-o $TARGET_DIR/calls/all.raw.vcf \
-	-R $REF_FASTA \
-	--dbsnp $REF_DBSNP \
-	>$TARGET_DIR/calls/logs/all.unifiedGenotyper.log \
-	2>$TARGET_DIR/calls/logs/all.unifiedGenotyper.err.log &
+VCF_NAME=""
+echo "Calling Variants using:"
+if [ -z $1 ]
+then
+	echo "UnifiedGenotyper"
+	VCF_NAME="unifiedGenotyper"
+	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+		-T UnifiedGenotyper \
+		-I $TARGET_DIR/calls/all.bam \
+		-o $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+		-R $REF_FASTA \
+		--dbsnp $REF_DBSNP \
+		>$TARGET_DIR/calls/logs/all.$VCF_NAME.log \
+		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.err.log &
+else
+	echo "HaplotypeCaller --minPruning $1"
+	VCF_NAME="haplotypeCaller$1"
+	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+		-T HaplotypeCaller \
+		-I $TARGET_DIR/calls/all.bam \
+		-o $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+		-R $REF_FASTA \
+		--dbsnp $REF_DBSNP \
+		--minPruning $1 \
+		>$TARGET_DIR/calls/logs/all.$VCF_NAME.log \
+		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.err.log &
+fi
 waitForJobs
 
 echo "Separating SNPs, INDELs for filtering"
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-T SelectVariants \
-	--variant $TARGET_DIR/calls/all.raw.vcf \
-	-o $TARGET_DIR/calls/indels.raw.vcf \
+	--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+	-o $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
 	-R $REF_FASTA \
 	-selectType INDEL \
-	>$TARGET_DIR/calls/logs/indels.selectVariants.log \
-	2>$TARGET_DIR/calls/logs/indels.selectVariants.err.log &
+	>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.log \
+	2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.err.log &
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-T SelectVariants \
-	--variant $TARGET_DIR/calls/all.raw.vcf \
-	-o $TARGET_DIR/calls/snps.raw.vcf \
+	--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+	-o $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
 	-R $REF_FASTA \
 	-selectType SNP \
-	>$TARGET_DIR/calls/logs/snps.selectVariants.log \
-	2>$TARGET_DIR/calls/logs/snps.selectVariants.err.log &
+	>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.log \
+	2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.err.log &
 waitForJobs
 
 echo "Applying hard filters"
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-T VariantFiltration \
-	--variant $TARGET_DIR/calls/snps.raw.vcf \
-	-o $TARGET_DIR/calls/snps.filtered.vcf \
+	--variant $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
+	-o $TARGET_DIR/calls/snps.$VCF_NAME.filtered.vcf \
 	-R $REF_FASTA \
 	--filterExpression "QD < 2.0" \
 	--filterName "QD Filter" \
@@ -379,12 +397,12 @@ $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	--filterName "MQRankSum Filter" \
 	--filterExpression "ReadPosRankSum < -8.0" \
 	--filterName "ReadPosRankSum Filter" \
-	>$TARGET_DIR/calls/logs/snps.variantFiltration.log \
-	2>$TARGET_DIR/calls/logs/snps.variantFiltration.err.log &
+	>$TARGET_DIR/calls/logs/snps.$VCF_NAME.variantFiltration.log \
+	2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.variantFiltration.err.log &
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-T VariantFiltration \
-	--variant $TARGET_DIR/calls/indels.raw.vcf \
-	-o $TARGET_DIR/calls/indels.filtered.vcf \
+	--variant $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
+	-o $TARGET_DIR/calls/indels.$VCF_NAME.filtered.vcf \
 	-R $REF_FASTA \
 	--filterExpression "QD < 2.0" \
 	--filterName "QD Filter" \
@@ -392,17 +410,17 @@ $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	--filterName "ReadPosRankSum Filter" \
 	--filterExpression "FS > 200.0" \
 	--filterName "FS Filter" \
-	>$TARGET_DIR/calls/logs/indels.variantFiltration.log \
-	2>$TARGET_DIR/calls/logs/indels.variantFiltration.err.log &
+	>$TARGET_DIR/calls/logs/indels.$VCF_NAME.variantFiltration.log \
+	2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.variantFiltration.err.log &
 waitForJobs
 
 echo "Recombining filtered SNPs and INDELs"
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-T CombineVariants \
-	--variant $TARGET_DIR/calls/snps.filtered.vcf \
-	--variant $TARGET_DIR/calls/indels.filtered.vcf \
-	-o $TARGET_DIR/calls/all.filtered.vcf \
+	--variant $TARGET_DIR/calls/snps.$VCF_NAME.filtered.vcf \
+	--variant $TARGET_DIR/calls/indels.$VCF_NAME.filtered.vcf \
+	-o $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
 	-R $REF_FASTA \
-	>$TARGET_DIR/calls/logs/all.combineVariants.log \
-	2>$TARGET_DIR/calls/logs/all.combineVariants.err.log &
+	>$TARGET_DIR/calls/logs/all.$VCF_NAME.combineVariants.log \
+	2>$TARGET_DIR/calls/logs/all.$VCF_NAME.combineVariants.err.log &
 waitForJobs
