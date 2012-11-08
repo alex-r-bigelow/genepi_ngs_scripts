@@ -343,6 +343,7 @@ then
 		-o $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
 		-R $REF_FASTA \
 		--dbsnp $REF_DBSNP \
+		--genotype_likelihoods_model BOTH \
 		>$TARGET_DIR/calls/logs/all.$VCF_NAME.log \
 		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.err.log &
 else
