@@ -340,12 +340,22 @@ then
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T UnifiedGenotyper \
 		-I $TARGET_DIR/calls/all.bam \
-		-o $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+		-o $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
 		-R $REF_FASTA \
 		--dbsnp $REF_DBSNP \
-		--genotype_likelihoods_model BOTH \
-		>$TARGET_DIR/calls/logs/all.$VCF_NAME.log \
-		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.err.log &
+		--genotype_likelihoods_model SNP \
+		>$TARGET_DIR/calls/logs/snps.$VCF_NAME.raw.log \
+		2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.raw.err.log &
+	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+		-T UnifiedGenotyper \
+		-I $TARGET_DIR/calls/all.bam \
+		-o $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
+		-R $REF_FASTA \
+		--dbsnp $REF_DBSNP \
+		--genotype_likelihoods_model INDEL \
+		>$TARGET_DIR/calls/logs/indels.$VCF_NAME.raw.log \
+		2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.raw.err.log &
+	waitForJobs
 else
 	echo "HaplotypeCaller --minPruning $1"
 	VCF_NAME="haplotypeCaller$1"
@@ -358,27 +368,27 @@ else
 		--minPruning $1 \
 		>$TARGET_DIR/calls/logs/all.$VCF_NAME.log \
 		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.err.log &
+	waitForJobs
+	
+	echo "Separating SNPs, INDELs for filtering"
+	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+		-T SelectVariants \
+		--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+		-o $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
+		-R $REF_FASTA \
+		-selectType INDEL \
+		>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.log \
+		2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.err.log &
+	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+		-T SelectVariants \
+		--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
+		-o $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
+		-R $REF_FASTA \
+		-selectType SNP \
+		>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.log \
+		2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.err.log &
+	waitForJobs
 fi
-waitForJobs
-
-echo "Separating SNPs, INDELs for filtering"
-$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-	-T SelectVariants \
-	--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
-	-o $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
-	-R $REF_FASTA \
-	-selectType INDEL \
-	>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.log \
-	2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.selectVariants.err.log &
-$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-	-T SelectVariants \
-	--variant $TARGET_DIR/calls/all.$VCF_NAME.raw.vcf \
-	-o $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
-	-R $REF_FASTA \
-	-selectType SNP \
-	>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.log \
-	2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.selectVariants.err.log &
-waitForJobs
 
 echo "Applying hard filters"
 $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
