@@ -1,4 +1,11 @@
 #!/bin/bash
+# Aligns, post-processes, and calls Paired-End Illumina Exome reads according to the
+# GATK best practice version 4 (Best, does not use ReduceReads or VariantRecalibrator - applies hard filters).
+# By default, UnifiedGenotyper is used for variant calling, but this can be changed by supplying a number as
+# a parameter to this script (the number, if it exists, will be used as the --minPruning option for haplotypeCaller)
+
+# Redirect DATA_DIR and TARGET_DIR for another project (currently works for the cll project)
+
 
 # ******** Helper Function ********
 # this will make the whole script fail if any piece does

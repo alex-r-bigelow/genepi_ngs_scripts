@@ -1,4 +1,11 @@
 #!/bin/bash
+# Aligns, post-processes, and calls Paired-End Illumina Whole Genome reads according to the
+# GATK best practice version 4 (Best, does not use ReduceReads or VariantRecalibrator - applies hard filters).
+# By default, UnifiedGenotyper is used for variant calling, but this can be changed by supplying a number as
+# a parameter to this script (the number, if it exists, will be used as the --minPruning option for haplotypeCaller)
+
+# Redirect DATA_DIR and TARGET_DIR for another project (currently works for the cll project)
+
 
 # ******** Helper Function ********
 # this will make the whole script fail if any piece does
@@ -117,7 +124,7 @@ done
 echo "Building, per-lane .bam files"
 for i in ${SAMPLES[*]}
 do
-	readGroup="@RG\tID:"$i"_exome_1\tSM:"$i"\tPL:ILLUMINA\tLB:exome"
+	readGroup="@RG\tID:"$i"_genome_1\tSM:"$i"\tPL:ILLUMINA\tLB:genome"
 	
 	counter=0
 	read1=(`ls $DATA_DIR/$i/*R1*.gz`)
