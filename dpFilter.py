@@ -22,7 +22,7 @@ if __name__ == '__main__':
     for line in infile:
         if len(line.strip()) <= 1 or line.startswith("#"):
             continue
-        columns = line.split()
+        columns = line.strip().split('\t')
         info = columns[7].split(";")
         for i in info:
             if i.startswith('DP'):
@@ -53,7 +53,7 @@ if __name__ == '__main__':
                 wrotePragma = True
             outfile.write(line)
         else:
-            columns = line.split()
+            columns = line.strip().split('\t')
             filters = columns[6].split(";")
             info = columns[7].split(";")
             for i in info:

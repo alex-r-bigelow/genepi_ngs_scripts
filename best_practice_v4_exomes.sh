@@ -76,6 +76,14 @@ CURRENT_DATE=`date +"%d_%b_%Y"`
 CURRENT_DATE=22_Oct_2012
 TARGET_DIR=/raid1/alex/sequencing/cll/runs/exome_$CURRENT_DATE
 
+VCF_NAME=""
+if [ -z $1 ]
+then
+	VCF_NAME="unifiedGenotyper"
+else
+	VCF_NAME="haplotypeCaller$1"
+fi
+
 # I use this if statement to comment stuff out
 if [[ 0 == 1 ]]
 then
@@ -338,12 +346,10 @@ waitForJobs
 
 fi
 
-VCF_NAME=""
 echo "Calling Variants using:"
 if [ -z $1 ]
 then
 	echo "UnifiedGenotyper"
-	VCF_NAME="unifiedGenotyper"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T UnifiedGenotyper \
 		-I $TARGET_DIR/calls/all.bam \
@@ -365,7 +371,6 @@ then
 	waitForJobs
 else
 	echo "HaplotypeCaller --minPruning $1"
-	VCF_NAME="haplotypeCaller$1"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T HaplotypeCaller \
 		-I $TARGET_DIR/calls/all.bam \
@@ -441,4 +446,13 @@ $RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 	-R $REF_FASTA \
 	>$TARGET_DIR/calls/logs/all.$VCF_NAME.combineVariants.log \
 	2>$TARGET_DIR/calls/logs/all.$VCF_NAME.combineVariants.err.log &
+waitForJobs
+
+echo "Applying DP Filter by hand"
+python dpFilter.py \
+	--stddev 5 \
+	--in $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
+	--out $TARGET_DIR/calls/all.$VCF_NAME.finished.vcf \
+	>$TARGET_DIR/calls/logs/all.$VCF_NAME.dpFilter.log \
+	2>$TARGET_DIR/calls/logs/all.$VCF_NAME.dpFilter.err.log &
 waitForJobs

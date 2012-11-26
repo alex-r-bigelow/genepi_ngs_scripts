@@ -8,8 +8,8 @@ class countingDict(dict):
         return returnValue
 
 class vcfLine:
-    def __init__(self, line):
-        self.columns = line.strip().split('\t')
+    def __init__(self, columns):
+        self.columns = columns
     
     def extractChrAndPos(self):
         if not hasattr(self,'chromosome'):
@@ -36,13 +36,13 @@ class vcfLine:
             indices = range(len(self.columns))[9:]
         if not hasattr(self, 'genotypes'):
             self.genotypes = {}
-        for i in self.indices:
+        for i in indices:
             if not self.genotypes.has_key(i):
                 genotype = self.columns[i].split(':')
-                if "|" in genotype:
-                    alleles = genotype.split("|")
+                if "|" in genotype[0]:
+                    alleles = genotype[0].split("|")
                 else:
-                    alleles = genotype.split("/")
+                    alleles = genotype[0].split("/")
                 if alleles[0] == ".":
                     allele0 = None
                 else:
@@ -57,24 +57,28 @@ class vcfLine:
                 
                 self.genotypes[i] = (allele0,allele1)
     
-    def numberOfSamplesWithData(self, population):
-        self.extractGenotypes(population)
+    def numberOfSamplesWithData(self, indices=None):
+        self.extractGenotypes(indices)
+        if indices == None:
+            indices = self.genotypes.iterkeys()
         count = 0
-        for i in population:
-            if self.genotypes[i] != None:
+        for i in indices:
+            if self.genotypes[i][0] != None:
                 count += 1
         return count
     
-    def getAlleleFrequencies(self, population):
+    def getAlleleFrequencies(self, indices=None):
         '''
         population should be either a string that is a key in self.populations or a set or list of integer column numbers with which to query line
         '''
         self.extractAlleles()
-        self.extractGenotypes(population)
+        self.extractGenotypes(indices)
+        if indices == None:
+            indices = self.genotypes.iterkeys()
         
         count = 0.0
         matches = countingDict()
-        for i in population:
+        for i in indices:
             allele0, allele1 = self.genotypes[i]
             if allele0 != None:
                 count += 2.0
@@ -82,21 +86,23 @@ class vcfLine:
                 matches[allele1] += 1
         
         if count == 0.0:
-            return dict([(a,float('Inf') for a in self.alleles)])
+            return dict([(a,float('Inf')) for a in self.alleles])
         else:
             return dict([(a,matches.get(i,0)/count) for i,a in enumerate(self.alleles)])
     
-    def getSharing(self, population):
+    def getSharing(self, indices=None):
         '''
         population should be either a string that is a key in self.populations or a set or list of integer column numbers with which to query vcfLine
         '''
         
         self.extractAlleles()
-        self.extractGenotypes(population)
+        self.extractGenotypes(indices)
+        if indices == None:
+            indices = self.genotypes.iterkeys()
         
         counts = countingDict()
-        for i in population:
-            allele0,allele1 = line.genotypes[i]
+        for i in indices:
+            allele0,allele1 = self.genotypes[i]
             
             if allele0 != None:
                 if allele0 == allele1:
@@ -107,28 +113,131 @@ class vcfLine:
         return dict([(a,counts.get(i,0)) for i,a in enumerate(self.alleles)])
 
 class kgpInterface:
+    BYTES_TO_ITERATE=8*4096
     def __init__(self, dirpath):
+        '''
+        Creates an interface to 1000 genomes .vcf files; these should be downloaded and decompressed
+        in a single directory (dirpath should be the path to that directory). This interface utilizes
+        the default file names and sort ordering; don't modify what you download!
+        
+        You should also have run this app at least once to build KGP.index in that directory before
+        using this class.
+        '''
         infile = open(os.path.join(dirpath,"KGP.index"),'rb')
-        self.level = pickle.load(infile)
         self.populations = pickle.load(infile)
-        self.positions = pickle.load(infile)
+        temp = pickle.load(infile)
+        self.fileSizes = pickle.load(infile)
         self.files = {}
-        for k,v in pickle.load(infile):
+        for k,v in temp.iteritems():
             self.files[k]=open(v,'r')
         infile.close()
     
+    def iterateVcf(self, vcfPath, tickFunction=None, numTicks=1000):
+        ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be
+        base pair position-ordered (the chromosome order is irrelevant) '''
+                
+        # We take advantage of the fact that the KGP .vcf files are bp-ordered
+        for f in self.files.itervalues():
+            f.seek(0)
+        
+        infile = open(vcfPath,'r')
+        
+        tickInterval = os.path.getsize(vcfPath)/numTicks
+        
+        return self._iterateVcf(infile, tickFunction, tickInterval)
+    
+    def _iterateVcf(self, infile, tickFunction, tickInterval):
+        nextTick = 0
+        lastKGPline = None
+                
+        for vline in infile:
+            vline = vline.strip()
+            if len(vline) <= 1 or vline.startswith("#"):
+                continue
+            if tickFunction != None and infile.tell() >= nextTick:
+                nextTick += tickInterval
+                tickFunction()
+            vline = vcfLine(vline.split('\t'))
+            vline.extractChrAndPos()
+            
+            if not self.files.has_key(vline.chromosome):
+                yield (vline,None)
+                continue
+            
+            # special case: if the last legit comparison was no match, we will have a line left over from KGP that could still
+            # potentially match
+            if lastKGPline != None:
+                if vline.position < lastKGPline.position:
+                    # Another no match; leave lastKGPline alone
+                    yield (vline,None)
+                    continue
+                elif vline.position == lastKGPline.position:
+                    # A match! Make sure to use up lastKGPline
+                    yield (vline,lastKGPline)
+                    lastKGPline = None
+                    continue
+                else:
+                    # okay the kgp line won't ever be matched, so we can continue with iterating
+                    lastKGPline = None
+            
+            # keep reading lines from KGP from where we left off last until we find/pass a match
+            yieldedSomething = False
+            for line in self.files[vline.chromosome]:
+                line = line.strip()
+                if len(line) <= 1 or line.startswith("#"):
+                    continue
+                line = vcfLine(line.split('\t'))
+                line.extractChrAndPos()
+                if vline.position < line.position:
+                    # this line is too early; there's no match, but we just read a line from KGP so we need to store the special case
+                    lastKGPline = line
+                    yieldedSomething = True
+                    yield (vline,None)
+                elif vline.position == line.position:
+                    # a match!
+                    yieldedSomething = True
+                    yield (vline,line)
+                else:
+                    # this is a little funky; we want to keep going if we haven't found/passed a match in KGP
+                    lastByte = self.files[vline.chromosome].tell()
+                    continue
+                # ... but if we actually yielded something, we want to move on to the next .vcf line
+                break
+            # out here, we've reached the end of KGP; yield no match until the .vcf file is depleted
+            if not yieldedSomething:
+                yield (vline,None)
+        # way out here, the .vcf file is depleted; close the file and we're done
+        infile.close()
+        raise StopIteration
+    
     def getVcfLines(self, chromosome, start, stop):
-        self.files[chromosome].seek(self.positions[chromosome][int(start/self.level)])
+        # Find a reasonable range of the file to iterate through by first
+        # using our hash table
+        lowByte = self.fileSizes[chromosome][0]
+        highByte = self.fileSizes[chromosome][1]
+        # now binary search until the space is iteratable
+        while highByte-lowByte > kgpInterface.BYTES_TO_ITERATE:
+            self.files[chromosome].seek((lowByte+highByte)/2)
+            dummy = self.files[chromosome].readline()   # throw away what's left of this line
+            nextByte = self.files[chromosome].tell()
+            dummy = self.files[chromosome].readline()
+            columns = dummy.strip().split('\t')
+            pos = int(columns[1])
+            if pos >= start:
+                highByte = nextByte
+            else:
+                lowByte = nextByte
+        # now iterate until we hit stop or EOF, collecting lines once we pass start
+        self.files[chromosome].seek(lowByte)
         linesToReturn = []
-        passedStart = False
         for line in self.files[chromosome]:
-            columns = line.split('\t')
+            columns = line.strip().split('\t')
             pos = int(columns[1])
             if pos >= start:
                 if pos >= stop:
                     return linesToReturn
                 else:
-                    linesToReturn.append(vcfLine(line))
+                    linesToReturn.append(vcfLine(columns))
         return linesToReturn
 
 if __name__ == "__main__":
@@ -138,12 +247,9 @@ if __name__ == "__main__":
                         help='Directory housing decompressed .vcf files 1-22,X')
     parser.add_argument('--populations', type=str, dest="pop",
                         help="Directory containing .txt lists of KGP sample IDs; the file name should correspond to the population.")
-    parser.add_argument('--indexLevel', type=int, dest="level",
-                        help="Every nth position will be indexed; a low number means a big index but faster lookup times. Probably a good balance is 100")
     
     args = parser.parse_args()
     
-    print "Loading populations..."
     # {population name:set(sample ID)}
     populations = {}
     reversePopulations = {}
@@ -159,11 +265,11 @@ if __name__ == "__main__":
                     reversePopulations[line.strip()]=popName
                 infile.close()
     
-    print "Loading positions..."
-    # {chrN:{int(position/args.level):byte offset in file}}
-    positions = {}
     # {chrN:file name}
     files = {}
+    
+    # {chrN:(first byte of real data,last byte in file)}
+    fileSizes = {}
     
     for dirname, dirnames, filenames in os.walk(args.data):
         for filename in filenames:
@@ -172,18 +278,12 @@ if __name__ == "__main__":
                 chrname = chrname[:chrname.find(".")]
                 fullpath = os.path.join(dirname,filename)
                 files[chrname]=fullpath
-                positions[chrname]={}
                 
                 infile = open(fullpath,'r')
-                lastIndex = -1
-                lastLine = 0
                 for line in infile:
-                    stripline = line.strip()
-                    if len(stripline) <= 1 or line.startswith("##"):
-                        lastLine = infile.tell()
+                    if line.startswith("##") or len(line.strip()) <= 1:
                         continue
                     elif line.startswith("#"):
-                        lastLine = infile.tell()
                         columns = line.strip().split('\t')
                         for i,c in enumerate(columns[9:]):
                             if reversePopulations.has_key(c):
@@ -191,21 +291,15 @@ if __name__ == "__main__":
                                     populations[reversePopulations[c]][c] = i+9
                                 elif populations[reversePopulations[c]][c] != i+9:
                                     raise Exception("KGP files have %s in different columns: %i, %i" % (c,i+9,populations[reversePopulations[c]][c]))
+                        fileSizes[chrname] = (infile.tell(),os.path.getsize(fullpath))
+                        break
                     else:
-                        columns = stripline.split('/t')
-                        currentPosition = int(columns[1])
-                        currentIndex = currentPosition/args.level
-                        if currentIndex > lastIndex:
-                            positions[chrname][currentIndex]=lastLine
-                        lastLine = infile.tell()
+                        raise Exception("KGP file %s has no header line"%filename)
                 infile.close()
     
     filestr = os.path.join(args.data,"KGP.index")
     outfile = open(filestr,'wb')
-    pickle.dump(args.level,outfile)
-    print "Writing populations..."
     pickle.dump(populations,outfile)
-    print "Writing positions..."
-    pickle.dump(positions,outfile)
     pickle.dump(files,outfile)
+    pickle.dump(fileSizes,outfile)
     outfile.close()

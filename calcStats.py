@@ -1,6 +1,9 @@
 #!/usr/bin/env python
-import argparse
-from index_kgp import vcfLine, kgpInterface
+import argparse, os
+from index_kgp import vcfLine, kgpInterface, countingDict
+
+def tick():
+    print ".",
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Creates a .csv file with some calculated statistics.')
@@ -14,76 +17,118 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     numAlleles = 0
-    print "Counting Alleles..."
+    print "Counting Alleles...",
     infile = open(args.infile,'r')
     for line in infile:
-        line = vcfLine(line)
+        columns = line.strip().split('\t')
+        if len(columns) <= 1 or line.startswith("#"):
+            continue
+        line = vcfLine(columns)
         line.extractAlleles()
         numAlleles = max(numAlleles,len(line.alleles))
     infile.close()
+    print numAlleles
     
     print "Opening KGP connection..."
     kgp = kgpInterface(args.data)
     
     print "Calculating..."
-    infile = open(args.infile,'r')
     outfile = open(args.outfile, 'w')
     
     outfile.write('Chromosome\tPosition')
     for i in xrange(numAlleles):
         outfile.write('\tAllele %i'%i)
-    outfile.write('\t# Samples w/data')
     for i in xrange(numAlleles):
         outfile.write('\t# Sharing Allele %i'%i)
+    outfile.write('\t# Samples w/data')
     for i in xrange(numAlleles):
         outfile.write('\tAllele %i Frequency'%i)
     for i in xrange(numAlleles):
         outfile.write('\tAllele %i KGP Frequency'%i)
     
-    for line in infile:
-        if len(line.strip()) <= 1 or line.startswith("#"):
-            continue
+    total = 0
+    noData = 0
+    passedKGP = 0
+    sharingCounts = countingDict()
+    sharingFractions = {}
+        
+    for line,kgpLine in kgp.iterateVcf(args.infile,tickFunction=tick,numTicks=1000):
         outfile.write('\n')
         
-        line = vcfLine(line)
-        line.extractChrAndPos()
+        # write chromosome, position
         outfile.write('%s\t%i'%(line.chromosome,line.position))
         
         line.extractAlleles()
-        outfile.write('\t%s'%('\t'.join(line.alleles)))
         
-        outfile.write('\t%i'%line.numberOfSamplesWithData())
+        for a in line.alleles:
+            outfile.write('\t%s'% a)
+        for x in xrange(numAlleles-len(line.alleles)):
+            outfile.write('\t-')
         
-        line.extractGenotypes()
-        sharing = line.getSharing(line.genotypes.iterkeys())
+        # write sharing per allele
+        sharing = line.getSharing()
         for a in line.alleles:
             outfile.write('\t%i'%sharing[a])
         for x in xrange(numAlleles-len(line.alleles)):
-            outfile.write('\t')
+            outfile.write('\t-')
         
-        frequencies = line.getAlleleFrequencies(line.genotypes.iterkeys())
+        # write sharing denominator
+        numberWithData = line.numberOfSamplesWithData()
+        outfile.write('\t%i'%numberWithData)
+        
+        # write allele frequencies in file
+        frequencies = line.getAlleleFrequencies()
         for a in line.alleles:
             outfile.write('\t%f'%frequencies[a])
         for x in xrange(numAlleles-len(line.alleles)):
-            outfile.write('\t')
+            outfile.write('\t-')
         
-        kgpLines = kgp.getVcfLines(line.chromosome,line.position,line.position+1)
-        if len(kgpLines) != 1:
-            if len(kgpLines) == 0:
-                for x in xrange(numAlleles):
-                    outfile.write('\tND')
-            else:
-                raiseException('More than one KGP line came back:\n%s' % (str(kgpLines)))
+        # write kgp allele frequencies
+        kgpFrequencies = None
+        if kgpLine == None:
+            for a in line.alleles:
+                outfile.write('\tND')
+            for x in xrange(numAlleles-len(line.alleles)):
+                outfile.write('\t-')
         else:
-            kgpLines[0].extractGenotypes()
-            kgpFrequencies = kgpLines[0].getAlleleFrequencies(kgpLines[0].genotypes.iterkeys())
+            kgpLine.extractGenotypes()
+            kgpFrequencies = kgpLine.getAlleleFrequencies()
             for a in line.alleles:
                 if kgpFrequencies.has_key(a):
                     outfile.write('\t%f'%kgpFrequencies[a])
                 else:
-                    outfile.write('\tNA')
+                    outfile.write('\tND')
             for x in xrange(numAlleles-len(line.alleles)):
-                outfile.write('\t')
+                outfile.write('\t-')
+        
+        # count stuff for final output
+        total += 1
+        if kgpLine == None or numberWithData == 0:
+            noData += 1
+        else:
+            lowestFreq = 1.0
+            minorAllele = None
+            for a in line.alleles:
+                if kgpFrequencies.has_key(a):
+                    if kgpFrequencies[a] < lowestFreq:
+                        lowestFreq = kgpFrequencies[a]
+                        minorAllele = a
+            if lowestFreq <= 0.01:
+                passedKGP += 1
+                
+                proportion = sharing[minorAllele]/float(numberWithData)
+                sharingCounts[proportion] += 1
+                sharingFractions[proportion] = (sharing[minorAllele],numberWithData)
+    
     infile.close()
     outfile.close()
+    print ""
     print "Done"
+    print ""
+    print "Total number of variants: %i" % total
+    print "# of variants with at least some data from both sources: %i" % total-noData
+    print "# left if variants with no allele <= 0.01 are removed: %i" % passedKGP
+    temptotal = 0
+    for p,c in sorted(sharingCounts.iteritems()):
+        print "# left if variants sharing < %i/%i of the minor KGP allele are removed: %i" % (sharingFractions[p][0],sharingFractions[p][1],passedKGP-temptotal)
+        temptotal += c
