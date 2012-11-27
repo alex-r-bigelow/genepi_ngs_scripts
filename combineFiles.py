@@ -6,15 +6,31 @@ def tick():
     print ".",
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Creates a .csv file with some calculated statistics.')
-    parser.add_argument('--data', type=str, dest="data",
-                        help='Directory housing decompressed .vcf files 1-22,X. You should have created an index by running index_kgp before running this.')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='input .vcf file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='output .csv file')
+    parser = argparse.ArgumentParser(description='Merges .vcf, cvf, and .csv files into a single .cvf, .vcf, and/or .csv file')
+    parser.add_argument('--in', type=str, dest="infiles", nargs="+",
+                        help='Path(s) to every file coming in to be merged. File extensions will be used to infer file types.')
+    parser.add_argument('--out', type=str, dest="outfiles", nargs="+",
+                        help='Path(s) to every output file (may create at most one .vcf, .cvf, and/or .csv file)')
     
     args = parser.parse_args()
+    
+    infiles = {".vcf":[],".cvf":[],".csv":[]}
+    for p in args.infiles:
+        ext = os.path.splitext(p)[1].lower()
+        if not infiles.has_key(ext):
+            raise Exception("Unknown file format: %s"%ext)
+        infiles[ext].append(p)
+    
+    outfiles = {".vcf":None,".cvf":None,".csv":None}
+    for p in args.outfiles:
+        ext = os.path.splitext(p)[1].lower()
+        if not outfiles.has_key(ext):
+            raise Exception("Unknown file format: %s"%ext)
+        if outfiles[ext] != None:
+            raise Exception("Can't create more than one %s file"%ext)
+        outfiles[ext] = p
+    
+    
     
     numAlleles = 0
     print "Counting Alleles...",
