@@ -24,9 +24,10 @@ if __name__ == '__main__':
                              'chr20',
                              'chr21',
                              'chr22',
-                             'chrX'])
+                             'chrX',
+                             'chrY'])
     
-    parser = argparse.ArgumentParser(description='Leaves only chromosomes 1-22,X in a .vcf file')
+    parser = argparse.ArgumentParser(description='Leaves only chromosomes 1-22,X,Y in a .vcf file')
     parser.add_argument('--in', type=str, dest="infile",
                         help='input .vcf file')
     parser.add_argument('--out', type=str, dest="outfile",

@@ -1,55 +1,70 @@
 #!/usr/bin/env python
-import argparse, os
+import argparse, os, datetime
 from index_kgp import vcfLine, kgpInterface, countingDict
 
 def tick():
     print ".",
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Merges .vcf, cvf, and .csv files into a single .cvf, .vcf, and/or .csv file')
-    parser.add_argument('--in', type=str, dest="infiles", nargs="+",
-                        help='Path(s) to every file coming in to be merged. File extensions will be used to infer file types.')
+    parser = argparse.ArgumentParser(description='Creates a .cvf file from the CHROM, POS, ID, REF, ALT, QUAL, FILTER, and INFO fields of a .vcf file')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='Path to .vcf file')
     parser.add_argument('--out', type=str, dest="outfiles", nargs="+",
-                        help='Path(s) to every output file (may create at most one .vcf, .cvf, and/or .csv file)')
+                        help='Path to .cvf file')
     
     args = parser.parse_args()
     
-    infiles = {".vcf":[],".cvf":[],".csv":[]}
-    for p in args.infiles:
-        ext = os.path.splitext(p)[1].lower()
-        if not infiles.has_key(ext):
-            raise Exception("Unknown file format: %s"%ext)
-        infiles[ext].append(p)
+    numColumns = {"ALT":0,"FILTER":0}
     
-    outfiles = {".vcf":None,".cvf":None,".csv":None}
-    for p in args.outfiles:
-        ext = os.path.splitext(p)[1].lower()
-        if not outfiles.has_key(ext):
-            raise Exception("Unknown file format: %s"%ext)
-        if outfiles[ext] != None:
-            raise Exception("Can't create more than one %s file"%ext)
-        outfiles[ext] = p
+    # TODO: get the numeric ranges, all valid categorical values
     
-    
-    
-    numAlleles = 0
-    print "Counting Alleles...",
+    print "Counting columns, ranges, values...",
     infile = open(args.infile,'r')
     for line in infile:
-        columns = line.strip().split('\t')
-        if len(columns) <= 1 or line.startswith("#"):
+        line = line.strip()
+        if len(columns) <= 1:
             continue
-        line = vcfLine(columns)
-        line.extractAlleles()
-        numAlleles = max(numAlleles,len(line.alleles))
+        elif line.startswith("#"):
+            if line.startswith("##INFO"):
+                newTag = line[line.find("ID=")+3:]
+                newTag = newTag[:newTag.find(',')]
+                if numColumns.has_key(newTag):
+                    raise Exception("Duplicate INFO ID or use of reserved ID:\t%s" % newTag)
+                numColumns[newTag] = 0
+            continue
+        else:
+            line = vcfLine(line.split('\t'))
+            line.extractAlleles()
+            line.extractInfo()
+            line.extractFilters()
+            numColumns['ALT'] = max(numColumns['ALT'],len(line.alleles))
+            numColumns['FILTER'] = max(numColumns,len(line.filters))
+            for k,v in numColumns.iteritems():
+                if k == 'ALT':
+                    numColumns[k] = max(v,len(line.alleles))
+                elif k == 'FILTER':
+                    numColumns[k] = max(v,len(line.filters))
+                else:
+                    if not numColumns.has_key(k):
+                        raise Exception("Missing ##INFO pragma for ID: %s" % k)
+                    elif isinstance(line.info[k],list):
+                        numColumns[k] = max(v,len(line.info[k]))
+                    elif v != None:
+                        numColumns[k] = max(v,1)
     infile.close()
-    print numAlleles
     
-    print "Opening KGP connection..."
-    kgp = kgpInterface(args.data)
-    
-    print "Calculating..."
+    print "Creating file..."
     outfile = open(args.outfile, 'w')
+    
+    outfile.write("##\t%s created from %s on %s\n" % (args.outfile,args.str(infile,datetime.datetime.now())))
+    outfile.write("#\tChromosome\tCHR\n")
+    outfile.write("#\tPosition\tPOS\n")
+    outfile.write("#\tID\tID\n")
+    for i in xrange(len(numColumns['ALT'])):
+        outfile.write("#\tAllele %i\tIGNORE\n" % (i+1))
+    outfile.write("#\tQUAL\tNUMERIC\t0.0\t%f\n" % maxQual)
+    for k,v in sorted(numColumns.iteritems()):
+        
     
     outfile.write('Chromosome\tPosition')
     for i in xrange(numAlleles):

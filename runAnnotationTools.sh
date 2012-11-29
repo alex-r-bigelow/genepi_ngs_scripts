@@ -77,7 +77,8 @@ VAAST_BACKGROUND=/raid1/sequencing/reference/background/vaast/1KG_refGene_Dec201
 
 REF_DIR=/raid1/sequencing/reference/gatk_bundle/gatk_bundle_04_Oct_2012
 REF_FASTA=$REF_DIR/human_g1k_v37.fasta
-REF_FASTA2=$REF_DIR/human_g1k_v37.vaast.fasta
+#REF_FASTA2=$REF_DIR/human_g1k_v37.vaast.fasta
+REF_FASTA2=/raid1/sequencing/reference/vaast/hg19/chrAll.fa
 
 # <<<< adjust these two values to match the number of cores, GB of ram on the machine >>>>
 NUM_CORES=12
@@ -91,24 +92,26 @@ waitForJobs
 # silently test if we have enough memory... but fail early if we don't
 
 # <<<< these only need to be run once >>>>
-python buildVAASTreference.py --in $REF_FASTA --out $REF_FASTA2 &
+#python buildVAASTreference.py --in $REF_FASTA --out $REF_FASTA2 &
 #python index_kgp.py --data $KGP_DATA_DIR --populations $KGP_POP_DIR &
-MYDIR=`pwd`
+#MYDIR=`pwd`
 #cd $SNPEFF_DIR
 #$RUN_JAVA -jar snpEff.jar download -v hg19 &
 #cd $MYDIR
 # You also need to download dbNSFP2.0***.txt.gz and decompress it in SNPEFF_DIR,
 # but you'll need to do that via web browser
-waitForJobs
+#waitForJobs
 
-# <<<< reset this for a different project >>>>
+# <<<< reset these for a different project >>>>
+FILTER_MODE=PASS
 TARGET_DIR=/raid1/alex/sequencing/cll/runs/exome_22_Oct_2012
-TEMP=(`ls $TARGET_DIR/calls/all.*.finished.vcf`)
+
+TEMP=(`ls $TARGET_DIR/calls/$FILTER_MODE.*.finished.vcf`)
 TARGET_VCFS=""
 for s in ${TEMP[*]}
 do
-	v=${s##*/}
-	TARGET_VCFS="$TARGET_VCFS ${v%.vcf}"
+	v=${s##*/$FILTER_MODE}
+	TARGET_VCFS="$TARGET_VCFS ${v%.finished.vcf}"
 done
 
 # I use this if statement to comment stuff out
@@ -130,9 +133,9 @@ for s in ${TARGET_VCFS[*]}
 do
 	$RUN_JAVA -jar $SNPEFF_DIR/snpEff.jar \
 		-c $SNPEFF_DIR/snpEff.config \
-		-s $TARGET_DIR/annotation/snpeff/$s.summary.html \
+		-s $TARGET_DIR/annotation/snpeff/$FILTER_MODE.$s.summary.html \
 		hg19 \
-		$TARGET_DIR/calls/$s.vcf \
+		$TARGET_DIR/calls/$FILTER_MODE.$s.vcf \
 		>$TARGET_DIR/annotation/snpeff/$s.predbnsfp.vcf \
 		2>$TARGET_DIR/annotation/snpeff/logs/$s.predbnsfp.err.log &
 done
@@ -158,8 +161,8 @@ do
 		gwasCat \
 		$GWAS_CAT \
 		$TARGET_DIR/annotation/snpeff/$s.pregwascat.vcf \
-		>$TARGET_DIR/annotation/snpeff/$s.annotated.vcf \
-		2>$TARGET_DIR/annotation/snpeff/logs/$s.annotated.err.log &
+		>$TARGET_DIR/annotation/snpeff/$s.snpeff.vcf \
+		2>$TARGET_DIR/annotation/snpeff/logs/$s.snpeff.err.log &
 done
 waitForJobs
 
@@ -170,30 +173,14 @@ rm -rf $TARGET_DIR/annotation/vaast
 mkdir $TARGET_DIR/annotation/vaast
 mkdir $TARGET_DIR/annotation/vaast/logs
 
-echo "Removing filtered variants"
+echo "VAAST only handles the main reference contigs... throw other stuff out (this might be a problem some day... we're losing a few hundred genes this way)"
 for s in ${TARGET_VCFS[*]}
 do
-	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-		-T SelectVariants \
-		--variant $TARGET_DIR/calls/$s.vcf \
-		-o $TARGET_DIR/annotation/vaast/$s.vcf \
-		-R $REF_FASTA \
-		--excludeFiltered \
-		>$TARGET_DIR/annotation/vaast/logs/$s.selectVariants.log \
-		2>$TARGET_DIR/annotation/vaast/logs/$s.selectVariants.err.log &
-done
-waitForJobs
-
-fi
-
-echo "Picking only the chromosomes VAAST likes (yuck... this is a problem!)"
-for s in ${TARGET_VCFS[*]}
-do
-	python simplifyChromosomes.py \
-		--in $TARGET_DIR/annotation/vaast/$s.vcf \
-		--out $TARGET_DIR/annotation/vaast/$s.simple.vcf \
-		>$TARGET_DIR/annotation/vaast/logs/$s.simplifyChromosomes.log \
-		2>$TARGET_DIR/annotation/vaast/logs/$s.simplifyChromosomes.err.log &
+	python removeAlternateContigs.py \
+		--in $TARGET_DIR/calls/$FILTER_MODE.$s.vcf \
+		--out $TARGET_DIR/annotation/vaast/basicContigs.$s.vcf \
+		>$TARGET_DIR/annotation/vaast/logs/$s.removeAlternateContigs.log \
+		2>$TARGET_DIR/annotation/vaast/logs/$s.removeAlternateContigs.err.log &
 done
 waitForJobs
 
@@ -207,11 +194,13 @@ do
 		--build hg19 \
 		--format VCF \
 		--path $TARGET_DIR/annotation/vaast/$s/pre/ \
-		$TARGET_DIR/annotation/vaast/$s.simple.vcf \
+		$TARGET_DIR/annotation/vaast/basicContigs.$s.vcf \
 		>$TARGET_DIR/annotation/vaast/logs/$s.vaast_converter.log \
 		2>$TARGET_DIR/annotation/vaast/logs/$s.vaast_converter.err.log &
 done
 waitForJobs
+
+fi
 
 echo "Sorting"
 for s in ${TARGET_VCFS[*]}

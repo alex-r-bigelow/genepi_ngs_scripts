@@ -24,11 +24,32 @@ class vcfLine:
             self.alleles = self.columns[4].split(',')
             self.alleles.insert(0,self.columns[3])
     
-    def extractOther(self):
+    def extractInfo(self):
+        if not hasattr(self, 'info'):
+            self.info = {}
+            for i in self.columns[7].split(';'):
+                if '=' in i:
+                    values = i.split('=')
+                    key = i[0]
+                    value = i[1]
+                    if ',' in value:
+                        value = value.split(',')
+                else:
+                    key = i
+                    value = None
+                
+                self.info[key] = value
+    
+    def extractQual(self):
         if not hasattr(self, 'qual'):
             self.qual = float(columns[5])
+    
+    def extractFilters(self):
+        if not hasattr(self, 'filters'):
             self.filters = columns[6].split(';')
-            self.info = self.columns[7].split(';')
+    
+    def extractFormat(self):
+        if not hasattr(self, 'format'):
             self.format = self.columns[8].split(':')
     
     def extractGenotypes(self, indices=None):
@@ -111,6 +132,63 @@ class vcfLine:
                     counts[allele0] += 1
                     counts[allele1] += 1
         return dict([(a,counts.get(i,0)) for i,a in enumerate(self.alleles)])
+    
+    def __str__(self):
+        outline = ""
+        
+        if hasattr(self,'chromosome'):
+            outline += self.chromosome + '\t'
+        else:
+            outline += self.columns[0] + '\t'
+        
+        if hasattr(self,'position'):
+            outline += '%i\t' % self.position
+        else:
+            outline += self.columns[1] + '\t'
+        
+        if hasattr(self,'id'):
+            outline += self.id + '\t'
+        else:
+            outline += self.columns[2] + '\t'
+        
+        if hasattr(self,'alleles'):
+            outline += self.alleles[0] + '\t' + ','.join(self.alleles[1:]) + '\t'
+        else:
+            outline += self.columns[3] + '\t' + self.columns[4] + '\t'
+        
+        if hasattr(self,'qual'):
+            outline += '%f\t' % self.qual
+        else:
+            outline += self.columns[5] + '\t'
+        
+        if hasattr(self,'filters'):
+            outline += ";".join(self.filters) + '\t'
+        else:
+            outline += self.columns[6] + '\t'
+        
+        if hasattr(self,'info'):
+            infostrs = []
+            for k,v in self.info.iteritems():
+                if v == None:
+                    infostrs.append(k)
+                elif isinstance(v,list):
+                    infostrs.append(k + "=" + ','.join(v))
+                else:
+                    infostrs.append(k + "=" + v)
+            outline += ";".join(sorted(infostrs)) + '\t'
+        else:
+            outline += self.columns[7] + '\t'
+        
+        if hasattr(self,'format'):
+            outline += ":".join(self.format) + '\t'
+        else:
+            outline += self.columns[8] + '\t'
+        
+        if len(columns) >= 9:
+            # TODO: be fancier with the genotypes...?
+            outline += '\t'.join(self.columns[9:])
+        
+        return outline + '\n'
 
 class kgpInterface:
     BYTES_TO_ITERATE=8*4096
@@ -167,7 +245,10 @@ class kgpInterface:
             # special case: if the last legit comparison was no match, we will have a line left over from KGP that could still
             # potentially match
             if lastKGPline != None:
-                if vline.position < lastKGPline.position:
+                if vline.chromosome != lastKGPline.chromosome:
+                    # wierd little corner case at the end of a chromosome; the last pass could be irrelevant
+                    lastKGPline = None
+                elif vline.position < lastKGPline.position:
                     # Another no match; leave lastKGPline alone
                     yield (vline,None)
                     continue
