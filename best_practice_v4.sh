@@ -52,6 +52,7 @@ waitForJobs ()
 #					variants, "PURGED" will run annotations on only on-target variants for
 #					exome/targeted studies, and "PASS" will run annotations only on variants that
 #					PASS all filters (except the DP Filter, which is applied by hand afterward)
+# VST_SET_OP		String to give VST for combining individuals
 
 # Paths to the main directory of each app:
 # JAVA
@@ -60,12 +61,12 @@ waitForJobs ()
 # PICARD_DIR
 # GATK_DIR
 # SNPEFF_DIR
-# VAAST_DIR
-# VAAST_vaast_converter_DIR
-# VAAST_VST_DIR
-# VAAST_vaast_sort_gff3_DIR
+# VAAST
+# VAAST_vaast_converter
+# VAAST_VST
+# VAAST_vaast_sort_gff
 # VAAST_VAT
-# VAAST_QC_DIR		( for quality-check.pl, but there are some bad chars there )
+# VAAST_QC			( for quality-check.pl, but there are some bad chars there )
 
 # Paths to reference files:
 # --- Reference genomes ----
@@ -79,6 +80,9 @@ waitForJobs ()
 # REF_HAPMAP
 # REF_OMNI
 # (EXOME_TARGETS - see above)
+# ---- snpEff ----
+# GWAS_CAT
+# DBNSFP
 # ---- VAAST ----
 # VAAST_BACKGROUND
 # VAAST_FEATURES
@@ -89,34 +93,35 @@ waitForJobs ()
 
 # ******** Some initial variable verifying/twisting that always happens ********
 # verify all our required parameters are valid
-if	! ([ $PHASE == "setup" ] || \
-		[ $PHASE == "align" ] || \
-		[ $PHASE == "build_bam" ] || \
-		[ $PHASE == "post_process" ] || \
-		[ $PHASE == "call" ] || \
-		[ $PHASE == "filter" ] || \
-		[ $PHASE == "annotate" ] || \
-		[ $PHASE == "summarize" ]) || \
+if	! ([ "$PHASE" == "setup" ] || \
+		[ "$PHASE" == "align" ] || \
+		[ "$PHASE" == "build_bam" ] || \
+		[ "$PHASE" == "post_process" ] || \
+		[ "$PHASE" == "call" ] || \
+		[ "$PHASE" == "filter" ] || \
+		[ "$PHASE" == "annotate" ] || \
+		[ "$PHASE" == "summarize" ]) || \
 	[ ! -d $DATA_DIR ] || \
 	[ ! -d $TARGET_DIR ] || \
-	! (([ $EXOME_OR_GENOME == "exome" ] && [ -e $EXOME_TARGETS ]) || [ $EXOME_OR_GENOME == "genome" ]) || \
+	! (([ "$EXOME_OR_GENOME" == "exome" ] && [ -e $EXOME_TARGETS ]) || [ "$EXOME_OR_GENOME" == "genome" ]) || \
 	[ -z $NUM_CORES ] || \
 	[ -z $MAX_MEM ] || \
-	! ([ $FILTER_MODE == "ALL" ] || \
-		[ $FILTER_MODE == "PURGED" ] || \
-		[ $FILTER_MODE == "PASS" ]) || \
+	! ([ "$FILTER_MODE" == "ALL" ] || \
+		[ "$FILTER_MODE" == "PURGED" ] || \
+		[ "$FILTER_MODE" == "PASS" ]) || \
+	[ -z $VST_SET_OP ] || \
 	[ ! -e $JAVA/bin/java ] || \
 	[ ! -e $BWA_DIR/bwa ] || \
 	[ ! -e $SAM_DIR/samtools ] || \
 	[ ! -e $PICARD_DIR/MarkDuplicates.jar ] || \
 	[ ! -e $GATK_DIR/GenomeAnalysisTK.jar ] || \
 	[ ! -e $SNPEFF_DIR/snpEff.jar ] || \
-	[ ! -e $VAAST_VAAST_DIR/VAAST ] || \
-	[ ! -e $VAAST_vaast_converter_DIR/vaast_converter ] || \
-	[ ! -e $VAAST_VST_DIR/VST ] || \
-	[ ! -e $VAAST_vaast_sort_gff3_DIR/vaast_sort_gff3 ] || \
-	[ ! -e $VAAST_VAT_DIR/VAT ] || \
-	[ ! -e $VAAST_QC_DIR/quality-check.pl ] || \
+	[ ! -e $VAAST_VAAST ] || \
+	[ ! -e $VAAST_vaast_converter ] || \
+	[ ! -e $VAAST_VST ] || \
+	[ ! -e $VAAST_vaast_sort_gff ] || \
+	[ ! -e $VAAST_VAT ] || \
+	[ ! -e $VAAST_QC ] || \
 	[ ! -e $REF_FASTA ] || \
 	[ ! -e $VAAST_FASTA ] || \
 	[ ! -e $REF_DBSNP_129 ] || \
@@ -124,7 +129,13 @@ if	! ([ $PHASE == "setup" ] || \
 	[ ! -e $REF_MILLS ] || \
 	[ ! -e $REF_KGP ] || \
 	[ ! -e $REF_HAPMAP ] || \
-	[ ! -e $REF_OMNI ]
+	[ ! -e $REF_OMNI ] || \
+	[ ! -e $GWAS_CAT ] || \
+	[ ! -e $DBNSFP ] || \
+	[ ! -e $VAAST_BACKGROUND ] || \
+	[ ! -e $VAAST_FEATURES ] || \
+	[ ! -d $KGP_DATA_DIR ] || \
+	[ ! -e $KGP_POP_DIR ]
 then
 	echo "Something is wrong with your parameters!"
 	echo "Something is wrong with your parameters!" >&2
@@ -165,11 +176,11 @@ waitForJobs
 
 #******** Actual jobs start here ********
 
-if [ $PHASE == "setup" ]
+if [ "$PHASE" == "setup" ]
 then
 	echo "setup..."
 	
-	# index the REF_FASTA if needed
+	# index the REF_FASTA for bwa, samtools if needed
 	if	[ ! -e $REF_FASTA.amb ] || \
 		[ ! -e $REF_FASTA.ann ] || \
 		[ ! -e $REF_FASTA.bwt ] || \
@@ -182,15 +193,29 @@ then
 	then
 		$SAM_DIR/samtools faidx $REF_FASTA &
 	fi
+	# build my KGP index if needed
+	if [ ! -e $KGP_DATA_DIR/KGP.index ]
+	then
+		python index_kgp.py --data $KGP_DATA_DIR --populations $KGP_POP_DIR &
+	fi
+	# download snpEff database for hg19
+	if [ `ls snpEff_*_hg19.zip | wc -l` > 0 ]
+	then
+		MYDIR=`pwd`
+		cd $SNPEFF_DIR
+		$RUN_JAVA -jar snpEff.jar download -v hg19 &
+		cd $MYDIR
+	fi
+	
 	# start totally fresh
-	rm -rf $TARGET_DIR
+	rm -rf $TARGET_DIR &
 	waitForJobs
 	mkdir $TARGET_DIR
 	
 	export PHASE="align"
 fi
 
-if [ $PHASE == "align" ]
+if [ "$PHASE" == "align" ]
 then
 	echo "align..."
 	rm -rf $TARGET_DIR/alignment
@@ -198,7 +223,7 @@ then
 	
 	for i in ${SAMPLES[*]}
 	do
-		echo "Aligning "$i
+		echo "...aln "$i
 		mkdir $TARGET_DIR/alignment/$i
 		mkdir $TARGET_DIR/alignment/$i/logs
 		
@@ -231,7 +256,7 @@ then
 	export PHASE="build_bam"
 fi
 
-if [ $PHASE == "build_bam" ]
+if [ "$PHASE" == "build_bam" ]
 then
 	echo "build_bam..."
 	for i in ${SAMPLES[*]}
@@ -282,7 +307,6 @@ then
 	done
 	
 	echo "...bundle"
-	echo "Bundling per-sample .bam files"
 	for i in ${SAMPLES[*]}
 	do
 		NUMLANES=`ls $DATA_DIR/$i/*R1*.gz | wc -l`
@@ -307,7 +331,7 @@ then
 	export PHASE="post_process"
 fi
 
-if [ $PHASE == "post_process" ]
+if [ "$PHASE" == "post_process" ]
 then
 	echo "post_process..."
 	echo "...dedup"
@@ -316,7 +340,6 @@ then
 	mkdir $TARGET_DIR/dedup/logs
 	for i in ${SAMPLES[*]}
 	do
-	# TODO: the genomes run will have a different INPUT file here
 		$RUN_JAVA -jar $PICARD_DIR/MarkDuplicates.jar \
 			INPUT=$TARGET_DIR/alignment/$i/merged.bam \
 			OUTPUT=$TARGET_DIR/dedup/$i.bam \
@@ -428,7 +451,7 @@ then
 	export PHASE="call"
 fi
 
-if [ $PHASE == "call" ]
+if [ "$PHASE" == "call" ]
 then
 	echo "call..."
 	rm -rf $TARGET_DIR/calls
@@ -449,7 +472,6 @@ then
 		>$TARGET_DIR/calls/logs/all.merge.log \
 		2>$TARGET_DIR/calls/logs/all.merge.err.log &
 	waitForJobs
-	fi
 	
 	if [ -z $MIN_PRUNING ]
 	then
@@ -509,13 +531,13 @@ then
 	export PHASE="filter"
 fi
 
-if [ $PHASE == "filter" ]
+if [ "$PHASE" == "filter" ]
 then
 	echo "filter..."
 	
 	echo "...hard"
 	INBREEDING_PARAMETER=""
-	if [[ ${#SAMPLES[@]} >= 10 ]]
+	if (( ${#SAMPLES[@]} >= 10 ))
 	then
 		INBREEDING_PARAMETER="--filterExpression \"InbreedingCoeff < -0.8\" --filterName \"InbreedingCoeff Filter\""
 	fi
@@ -565,20 +587,17 @@ then
 		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.combineVariants.err.log &
 	waitForJobs
 	
-	if [[ $EXOME_OR_GENOME == "exome" ]]
+	if [ "$EXOME_OR_GENOME" == "exome" ]
 	then
 		echo "...purge"
-		for s in ${TARGET_VCFS[*]}
-		do
-			$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
-				-T SelectVariants \
-				--variant $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
-				-o $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf \
-				-R $REF_FASTA \
-				-L $EXOME_TARGETS \
-				>$TARGET_DIR/annotation/vaast/logs/purged.$VCF_NAME.selectVariants.log \
-				2>$TARGET_DIR/annotation/vaast/logs/purged.$VCF_NAME.selectVariants.err.log &
-		done
+		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
+			-T SelectVariants \
+			--variant $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
+			-o $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf \
+			-R $REF_FASTA \
+			-L $EXOME_TARGETS \
+			>$TARGET_DIR/calls/logs/purged.$VCF_NAME.selectVariants.log \
+			2>$TARGET_DIR/calls/logs/purged.$VCF_NAME.selectVariants.err.log &
 		waitForJobs
 	else
 		mv $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf
@@ -591,8 +610,8 @@ then
 		-o $TARGET_DIR/calls/pass.$VCF_NAME.filtered.vcf \
 		-R $REF_FASTA \
 		--excludeFiltered \
-		>$TARGET_DIR/annotation/vaast/logs/pass.$VCF_NAME.selectVariants.log \
-		2>$TARGET_DIR/annotation/vaast/logs/pass.$VCF_NAME.selectVariants.err.log &
+		>$TARGET_DIR/calls/logs/pass.$VCF_NAME.selectVariants.log \
+		2>$TARGET_DIR/calls/logs/pass.$VCF_NAME.selectVariants.err.log &
 	waitForJobs
 	
 	echo "...manual DP Filter"
@@ -611,201 +630,175 @@ then
 	python dpFilter.py \
 		--stddev 5 \
 		--in $TARGET_DIR/calls/pass.$VCF_NAME.filtered.vcf \
-		--out $TARGET_DIR/calls/PASS.$VCF_NAME.finished.vcf \
+		--out $TARGET_DIR/calls/PASS.$VCF_NAME.vcf \
 		>$TARGET_DIR/calls/logs/pass.$VCF_NAME.dpFilter.log \
 		2>$TARGET_DIR/calls/logs/pass.$VCF_NAME.dpFilter.err.log &
 	waitForJobs
-	# At this point, the .vcf files with caps are ready for analysis elsewhere... FILTER_MODE will decide which one gets annotated
 	export PHASE="annotate"
 fi
 
-if [ $PHASE == "annotate" ]
+# At this point, the .vcf files with caps are ready for analysis elsewhere... FILTER_MODE will decide which one gets annotated
+VCF_NAME=$FILTER_MODE.$VCF_NAME
+
+if [ "$PHASE" == "annotate" ]
 then
+	if [[ 0 == 1 ]]
+	then
 	echo "annotate..."
 	rm -rf $TARGET_DIR/annotation
 	mkdir $TARGET_DIR/annotation
+	
+	echo "...VAAST"
+	rm -rf $TARGET_DIR/annotation/vaast
+	mkdir $TARGET_DIR/annotation/vaast
+	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME
+	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME/logs
+	
+	echo "......removeAlternateContigs"
+	python removeAlternateContigs.py \
+		--in $TARGET_DIR/calls/$VCF_NAME.vcf \
+		--out $TARGET_DIR/annotation/vaast/$VCF_NAME/basicContigs.vcf \
+		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/removeAlternateContigs.log \
+		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/removeAlternateContigs.err.log &
+	waitForJobs
+	
+	echo "......vaast_converter"
+	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME/pre
+	$VAAST_vaast_converter \
+		--build hg19 \
+		--format VCF \
+		--path $TARGET_DIR/annotation/vaast/$VCF_NAME/pre/ \
+		$TARGET_DIR/annotation/vaast/$VCF_NAME/basicContigs.vcf \
+		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/vaast_converter.log \
+		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/vaast_converter.err.log &
+	waitForJobs
+	
+	echo "......vaast_sort_gff3"
+	for i in $TARGET_DIR/annotation/vaast/$VCF_NAME/pre/*.gvf
+	do
+		j=${i##*/}
+		$VAAST_vaast_sort_gff \
+			--in_place \
+			--perl_sort \
+			--no_backup \
+			$i \
+			>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/${j%.gvf}.pre.vaast_sort_gff.log \
+			2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/${j%.gvf}.pre.vaast_sort_gff.err.log &
+	done
+	waitForJobs
+	
+	echo "......VAT"
+	rm -rf $TARGET_DIR/annotation/vaast/$VCF_NAME/post
+	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME/post
+	for i in $TARGET_DIR/annotation/vaast/$VCF_NAME/pre/*.gvf
+	do
+		j=${i##*/}
+		$VAAST_VAT \
+			--build hg19 \
+			--fasta $VAAST_FASTA \
+			--features $VAAST_FEATURES \
+			$i \
+			>$TARGET_DIR/annotation/vaast/$VCF_NAME/post/$j \
+			2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/${j%.gvf}.VAT.log &
+	done
+	waitForJobs
+	
+	echo "......vaast_sort_gff3"
+	for i in $TARGET_DIR/annotation/vaast/$VCF_NAME/post/*.gvf
+	do
+		j=${i##*/}
+		$VAAST_vaast_sort_gff \
+			--in_place \
+			--perl_sort \
+			--no_backup \
+			$i \
+			>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/${j%.gvf}.post.vaast_sort_gff.log \
+			2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/${j%.gvf}.post.vaast_sort_gff.err.log &
+	done
+	waitForJobs
+	
+	echo "......VST"
+	echo $VST_SET_OP
+	$VAAST_VST \
+		--ops $VST_SET_OP \
+		$TARGET_DIR/annotation/vaast/$VCF_NAME/post/*.gvf \
+		>$TARGET_DIR/annotation/vaast/$VCF_NAME/$VCF_NAME.cdr \
+		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VST.log &
+	waitForJobs
+	
+	echo "......quality-check.pl"
+	$VAAST_QC \
+		-sim 100000 \
+		$VAAST_BACKGROUND \
+		$TARGET_DIR/annotation/vaast/$VCF_NAME/$VCF_NAME.cdr \
+		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/quality-check.log \
+		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/quality-check.err.log &
+	waitForJobs
+	
+	fi
+	
+	echo "......VAAST"
+	$VAAST \
+		--mode lrt \
+		--outfile $TARGET_DIR/annotation/vaast/$VCF_NAME/$VCF_NAME \
+		--indel \
+		$VAAST_FEATURES \
+		$VAAST_BACKGROUND \
+		$TARGET_DIR/annotation/vaast/$VCF_NAME/$VCF_NAME.cdr \
+		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.log \
+		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.err.log &
+	waitForJobs
 	
 	echo "...snpeff"
 	rm -rf $TARGET_DIR/annotation/snpeff
 	mkdir $TARGET_DIR/annotation/snpeff
 	mkdir $TARGET_DIR/annotation/snpeff/logs
-	
-	# TODO: continue here
-	
+		
 	$RUN_JAVA -jar $SNPEFF_DIR/snpEff.jar \
 		-c $SNPEFF_DIR/snpEff.config \
-		-s $TARGET_DIR/annotation/snpeff/$FILTER_MODE.$s.summary.html \
+		-s $TARGET_DIR/annotation/snpeff/$VCF_NAME.summary.html \
 		hg19 \
-		$TARGET_DIR/calls/$FILTER_MODE.$s.vcf \
-		>$TARGET_DIR/annotation/snpeff/$s.predbnsfp.vcf \
-		2>$TARGET_DIR/annotation/snpeff/logs/$s.predbnsfp.err.log &
+		$TARGET_DIR/calls/$VCF_NAME.vcf \
+		>$TARGET_DIR/annotation/snpeff/$VCF_NAME.predbnsfp.vcf \
+		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.predbnsfp.err.log &
 	waitForJobs
 	
-	for s in ${TARGET_VCFS[*]}
-	do
-		$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
-			dbnsfp \
-			-a \
-			$DBNSFP \
-			$TARGET_DIR/annotation/snpeff/$s.predbnsfp.vcf \
-			>$TARGET_DIR/annotation/snpeff/$s.pregwascat.vcf \
-			2>$TARGET_DIR/annotation/snpeff/logs/$s.pregwascat.err.log &
-	done
+	$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
+		dbnsfp \
+		-a \
+		$DBNSFP \
+		$TARGET_DIR/annotation/snpeff/$VCF_NAME.predbnsfp.vcf \
+		>$TARGET_DIR/annotation/snpeff/$VCF_NAME.pregwascat.vcf \
+		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.pregwascat.err.log &
 	waitForJobs
 	
-	for s in ${TARGET_VCFS[*]}
-	do
-		$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
-			gwasCat \
-			$GWAS_CAT \
-			$TARGET_DIR/annotation/snpeff/$s.pregwascat.vcf \
-			>$TARGET_DIR/annotation/snpeff/$s.snpeff.vcf \
-			2>$TARGET_DIR/annotation/snpeff/logs/$s.snpeff.err.log &
-	done
-	waitForJobs
-	
-	echo "...VAAST"
-	rm -rf $TARGET_DIR/annotation/vaast
-	mkdir $TARGET_DIR/annotation/vaast
-	mkdir $TARGET_DIR/annotation/vaast/logs
-	
-	echo "......removeAlternateContigs"
-	for s in ${TARGET_VCFS[*]}
-	do
-		python removeAlternateContigs.py \
-			--in $TARGET_DIR/calls/$FILTER_MODE.$s.vcf \
-			--out $TARGET_DIR/annotation/vaast/basicContigs.$s.vcf \
-			>$TARGET_DIR/annotation/vaast/logs/$s.removeAlternateContigs.log \
-			2>$TARGET_DIR/annotation/vaast/logs/$s.removeAlternateContigs.err.log &
-	done
-	waitForJobs
-	
-	echo "......vaast_converter"
-	for s in ${TARGET_VCFS[*]}
-	do
-		rm -rf $TARGET_DIR/annotation/vaast/$s
-		mkdir $TARGET_DIR/annotation/vaast/$s
-		mkdir $TARGET_DIR/annotation/vaast/$s/pre
-		$VAAST_CONVERTER \
-			--build hg19 \
-			--format VCF \
-			--path $TARGET_DIR/annotation/vaast/$s/pre/ \
-			$TARGET_DIR/annotation/vaast/basicContigs.$s.vcf \
-			>$TARGET_DIR/annotation/vaast/logs/$s.vaast_converter.log \
-			2>$TARGET_DIR/annotation/vaast/logs/$s.vaast_converter.err.log &
-	done
-	waitForJobs
-	fi
-	
-	echo "......vaast_sort_gff3"
-	for s in ${TARGET_VCFS[*]}
-	do
-		for i in $TARGET_DIR/annotation/vaast/$s/pre/*.gvf
-		do
-			j=${i##*/}
-			$VAAST_SORT_GFF \
-				--in_place \
-				--perl_sort \
-				--no_backup \
-				$i \
-				>$TARGET_DIR/annotation/vaast/logs/$s.${j%.gvf}.pre.vaast_sort_gff.log \
-				2>$TARGET_DIR/annotation/vaast/logs/$s.${j%.gvf}.pre.vaast_sort_gff.err.log &
-		done
-	done
-	waitForJobs
-	
-	echo "......VAT"
-	for s in ${TARGET_VCFS[*]}
-	do
-		rm -rf $TARGET_DIR/annotation/vaast/$s/post
-		mkdir $TARGET_DIR/annotation/vaast/$s/post
-		for i in $TARGET_DIR/annotation/vaast/$s/pre/*.gvf
-		do
-			j=${i##*/}
-			$VAT \
-				--build hg19 \
-				--fasta $REF_FASTA2 \
-				--features $REF_GENE \
-				$i \
-				>$TARGET_DIR/annotation/vaast/$s/post/$j \
-				2>$TARGET_DIR/annotation/vaast/logs/$s.${j%.gvf}.VAT.log &
-		done
-	done
-	waitForJobs
-	
-	echo "......vaast_sort_gff3"
-	for s in ${TARGET_VCFS[*]}
-	do
-		for i in $TARGET_DIR/annotation/vaast/$s/post/*.gvf
-		do
-			j=${i##*/}
-			$VAAST_SORT_GFF \
-				--in_place \
-				--perl_sort \
-				--no_backup \
-				$i \
-				>$TARGET_DIR/annotation/vaast/logs/$s.${j%.gvf}.post.vaast_sort_gff.log \
-				2>$TARGET_DIR/annotation/vaast/logs/$s.${j%.gvf}.post.vaast_sort_gff.err.log &
-		done
-	done
-	waitForJobs
-	
-	echo "......VST"
-	for s in ${TARGET_VCFS[*]}
-	do
-		$VST \
-			--ops 'U(0..5)' \
-			$TARGET_DIR/annotation/vaast/$s/post/*.gvf \
-			>$TARGET_DIR/annotation/vaast/$s.cdr &
-	done
-	waitForJobs
-	
-	echo "......quality-check.pl"
-	for s in ${TARGET_VCFS[*]}
-	do
-		$QUALITY_CHECK_PL \
-			-sim 100000 \
-			$VAAST_BACKGROUND \
-			$TARGET_DIR/annotation/vaast/$s.cdr \
-			>$TARGET_DIR/annotation/vaast/logs/$s.quality-check.log \
-			2>$TARGET_DIR/annotation/vaast/logs/$s.quality-check.err.log &
-	done
-	waitForJobs
-	
-	echo "......VAAST"
-	for s in ${TARGET_VCFS[*]}
-	do
-		$VAAST \
-			--mode lrt \
-			--outfile $TARGET_DIR/annotation/vaast/$s \
-			--indel \
-			$REF_GENE \
-			$VAAST_BACKGROUND \
-			$TARGET_DIR/annotation/vaast/$s.cdr \
-			>$TARGET_DIR/annotation/vaast/logs/$s.VAAST.log \
-			2>$TARGET_DIR/annotation/vaast/logs/$s.VAAST.err.log &
-	done
+	$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
+		gwasCat \
+		$GWAS_CAT \
+		$TARGET_DIR/annotation/snpeff/$VCF_NAME.pregwascat.vcf \
+		>$TARGET_DIR/annotation/snpeff/$VCF_NAME.snpeff.vcf \
+		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.snpeff.err.log &
 	waitForJobs
 	
 	export PHASE="summarize"
 fi
 
-if [ $PHASE == "summarize" ]
+if [ "$PHASE" == "summarize" ]
 then
 	echo "summarize..."
 	
+	# technically, this step should go with annotate, but I need to test it separately...
 	echo "...calcStats"
 	rm -rf $TARGET_DIR/annotation/calcStats
 	mkdir $TARGET_DIR/annotation/calcStats
 	
-	for s in ${TARGET_VCFS[*]}
-	do
-		python calcStats.py \
-			--data $KGP_DATA_DIR \
-			--in $TARGET_DIR/calls/$s.vcf \
-			--out $TARGET_DIR/annotation/calcStats/$s.csv \
-			>$TARGET_DIR/annotation/calcStats/$s.calcStats.log \
-			2>$TARGET_DIR/annotation/calcStats/$s.calcStats.err.log &
-			waitForJobs
-	done
+	python calcStats.py \
+		--data $KGP_DATA_DIR \
+		--in $TARGET_DIR/calls/$VCF_NAME.vcf \
+		--out $TARGET_DIR/annotation/calcStats/$VCF_NAME.csv \
+		>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.log \
+		2>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.err.log &
+		waitForJobs
 fi
+
+echo "done"
