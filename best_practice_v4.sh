@@ -199,13 +199,14 @@ then
 		python index_kgp.py --data $KGP_DATA_DIR --populations $KGP_POP_DIR &
 	fi
 	# download snpEff database for hg19
-	if [ `ls snpEff_*_hg19.zip | wc -l` > 0 ]
-	then
-		MYDIR=`pwd`
-		cd $SNPEFF_DIR
-		$RUN_JAVA -jar snpEff.jar download -v hg19 &
-		cd $MYDIR
-	fi
+	# this is actually really buggy! it tries to download in the wrong places, and you have to tweak a line in snpEff.config to get it to work... do this by hand!
+	#if [ `ls snpEff_*_hg19.zip | wc -l` > 0 ]
+	#then
+	#	MYDIR=`pwd`
+	#	cd $SNPEFF_DIR
+	#	$RUN_JAVA -jar snpEff.jar download -v hg19 &
+	#	cd $MYDIR
+	#fi
 	
 	# start totally fresh
 	rm -rf $TARGET_DIR &
@@ -735,8 +736,6 @@ then
 		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/quality-check.err.log &
 	waitForJobs
 	
-	fi
-	
 	echo "......VAAST"
 	$VAAST \
 		--mode lrt \
@@ -748,6 +747,8 @@ then
 		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.log \
 		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.err.log &
 	waitForJobs
+	
+	fi
 	
 	echo "...snpeff"
 	rm -rf $TARGET_DIR/annotation/snpeff
