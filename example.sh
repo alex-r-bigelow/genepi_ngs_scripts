@@ -87,8 +87,12 @@ REF_DIR=/raid1/sequencing/reference/gatk_bundle/gatk_bundle_04_Oct_2012
 # --- Reference genomes ----
 # REF_FASTA
 export REF_FASTA=$REF_DIR/human_g1k_v37.fasta
-# VAAST_FASTA		VAAST doesn't cooperate well with reference genomes other than what they give you
-export VAAST_FASTA=/raid1/sequencing/reference/vaast/hg19/chrAll.fa
+# VAAST_FASTA		VAAST doesn't cooperate well with reference genomes other than what they give you;
+#					I recommend making your own VAAST-compatible reference with buildVAASTreference.py,
+#					but here's where you'd stick one they give you if you want to do that instead
+# export VAAST_FASTA=/raid1/sequencing/reference/vaast/hg19/chrAll.fa
+export VAAST_FASTA=$REF_DIR/human_g1k_v37.vaast.fasta
+
 # --- GATK bundle ---
 # REF_DBSNP_129
 REF_DBSNP_129=$REF_DIR/dbsnp_135.b37.excluding_sites_after_129.vcf
@@ -109,7 +113,7 @@ REF_HAPMAP=$REF_DIR/hapmap_3.3.b37.vcf
 REF_OMNI=$REF_DIR/1000G_omni2.5.b37.sites.vcf
 
 # (EXOME_TARGETS - see above)
-export EXOME_TARGETS=$DATA_DIR/SeqCap_EZ_Exome_v3_b37_capture.bed
+export EXOME_TARGETS=$DATA_DIR/SeqCap_EZ_Exome_v3_b37_capture+300.bed
 
 # ---- snpEff ----
 # GWAS_CAT

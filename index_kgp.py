@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 import pickle, argparse, sys, os
 
+def standardizeChromosome(chrom):
+    if not chrom.lower().startswith("chr"):
+        return "chr" + chrom
+    else:
+        return "chr" + chrom[3:]
+
 class countingDict(dict):
     def __missing__(self, key):
         returnValue = 0
@@ -8,14 +14,57 @@ class countingDict(dict):
         return returnValue
 
 class vcfLine:
+    @staticmethod
+    def constructLine(chr,pos,id=".",alleles=["N","N"],info={},qual=0.0,filters=["."],format=["GT"],number_of_genotypes=0):
+        temp = vcfLine([])
+        
+        chr = standardizeChromosome(chr)
+        temp.chromosome = chr
+        temp.columns.append(chr)
+        
+        temp.position = pos
+        temp.columns.append(str(pos))
+        
+        temp.id = id
+        temp.columns.append(id)
+        
+        temp.alleles = alleles
+        temp.columns.append(alleles[0])
+        temp.columns.append(",".join(alleles[1:]))
+        
+        temp.qual = qual
+        temp.columns.append(str(qual))
+        
+        temp.filters = filters
+        temp.columns.append(";".join(sorted(filters)))
+        
+        temp.info = info
+        infostrs = []
+        for k,v in info.iteritems():
+            if v == None:
+                infostrs.append(k)
+            elif isinstance(v,list):
+                infostrs.append(k + "=" + ','.join(v))
+            else:
+                infostrs.append(k + "=" + v)
+        temp.columns.append(";".join(sorted(infostrs)))
+        
+        temp.format = format
+        temp.columns.append(":".join(format))
+        
+        temp.genotypes = {}
+        for i in xrange(number_of_genotypes):
+            genotypes[i] = (None,None)
+            temp.columns.append("./.")
+        
+        return temp
+    
     def __init__(self, columns):
         self.columns = columns
     
     def extractChrAndPos(self):
         if not hasattr(self,'chromosome'):
-            self.chromosome = self.columns[0].lower()
-            if not self.chromosome.startswith('chr'):
-                self.chromosome = 'chr' + self.chromosome
+            self.chromosome = standardizeChromosome(self.columns[0])
             self.position = int(self.columns[1])
             self.id = self.columns[2]
     
@@ -133,7 +182,7 @@ class vcfLine:
                     counts[allele1] += 1
         return dict([(a,counts.get(i,0)) for i,a in enumerate(self.alleles)])
     
-    def __str__(self):
+    def __repr__(self):
         outline = ""
         
         if hasattr(self,'chromosome'):
@@ -184,7 +233,7 @@ class vcfLine:
         else:
             outline += self.columns[8] + '\t'
         
-        if len(columns) >= 9:
+        if len(self.columns) >= 9:
             # TODO: be fancier with the genotypes...?
             outline += '\t'.join(self.columns[9:])
         
@@ -226,7 +275,9 @@ class kgpInterface:
     
     def _iterateVcf(self, infile, tickFunction, tickInterval):
         nextTick = 0
-        lastKGPline = None
+        kgpLines = {}
+        for f in self.files.itervalues():
+            kgpLines[f] = None
                 
         for vline in infile:
             vline = vline.strip()
@@ -242,51 +293,30 @@ class kgpInterface:
                 yield (vline,None)
                 continue
             
-            # special case: if the last legit comparison was no match, we will have a line left over from KGP that could still
-            # potentially match
-            if lastKGPline != None:
-                if vline.chromosome != lastKGPline.chromosome:
-                    # wierd little corner case at the end of a chromosome; the last pass could be irrelevant
-                    lastKGPline = None
-                elif vline.position < lastKGPline.position:
-                    # Another no match; leave lastKGPline alone
-                    yield (vline,None)
-                    continue
-                elif vline.position == lastKGPline.position:
-                    # A match! Make sure to use up lastKGPline
-                    yield (vline,lastKGPline)
-                    lastKGPline = None
+            # continue through the KGP file (we assume the .vcf file is sorted by position, chromosome doesn't matter)
+            # until we match or pass the .vcf line
+            eof = False
+            while kgpLines[vline.chromosome] == None or kgpLines[vline.chromosome].position < vline.position:
+                text = self.files[vline.chromosome].readline()
+                if text == '':
+                    eof = True
+                    break
+                text = text.strip()
+                if len(text) <= 1 or text.startswith('#'):
                     continue
                 else:
-                    # okay the kgp line won't ever be matched, so we can continue with iterating
-                    lastKGPline = None
-            
-            # keep reading lines from KGP from where we left off last until we find/pass a match
-            yieldedSomething = False
-            for line in self.files[vline.chromosome]:
-                line = line.strip()
-                if len(line) <= 1 or line.startswith("#"):
-                    continue
-                line = vcfLine(line.split('\t'))
-                line.extractChrAndPos()
-                if vline.position < line.position:
-                    # this line is too early; there's no match, but we just read a line from KGP so we need to store the special case
-                    lastKGPline = line
-                    yieldedSomething = True
-                    yield (vline,None)
-                elif vline.position == line.position:
-                    # a match!
-                    yieldedSomething = True
-                    yield (vline,line)
-                else:
-                    # this is a little funky; we want to keep going if we haven't found/passed a match in KGP
-                    lastByte = self.files[vline.chromosome].tell()
-                    continue
-                # ... but if we actually yielded something, we want to move on to the next .vcf line
-                break
-            # out here, we've reached the end of KGP; yield no match until the .vcf file is depleted
-            if not yieldedSomething:
+                    kgpLines[vline.chromosome] = vcfLine(text.split('\t'))
+                    kgpLines[vline.chromosome].extractChrAndPos()
+                    assert kgpLines[vline.chromosome].chromosome == vline.chromosome
+            if eof:
                 yield (vline,None)
+                continue
+            elif kgpLines[vline.chromosome].position == vline.position:
+                yield (vline,kgpLines[vline.chromosome])
+                continue
+            else:
+                yield (vline,None)
+                continue
         # way out here, the .vcf file is depleted; close the file and we're done
         infile.close()
         raise StopIteration

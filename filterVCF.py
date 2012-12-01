@@ -28,13 +28,13 @@ if __name__ == '__main__':
                         "Any valid python eval() code is permitted.")
     parser.add_argument('--columns', type=str, dest="columns",
                         help="File containing INFO field IDs or 'CHROM', 'POS', 'ID', 'QUAL' or 'FILTER' to\n"+
-                        "use in --expression. Note that FILTER will always be a list\n"+
-                        "(even if it just has one element), and INFO fields will be a\n"+
-                        "list if a comma is present in the value (this could change from\n"+
-                        "row to row). QUAL will be converted to a float, but all other\n"+
-                        "values will be treated as strings. Any missing values will\n"+
-                        "yield a string of a single period \".\" You'll need to consider\n"+
-                        "conversions/error checking in your expressions.")
+                        "use in --expression. Note that CHROM will always be a string beginning\n"+
+                        "with \"chr\", regardless of the .vcf format, POS will always be an integer,\n"+
+                        "FILTER will always be a list (even if it just has one element), and INFO \n"+
+                        "fields will be a list if a comma is present in the value, otherwise it will\n"+
+                        "be a string (this could change from row to row). QUAL will be converted to a\n"+
+                        "float. Any missing values will yield a string of a single period \".\"\n"+
+                        "You'll need to consider conversions/error checking in your expressions.")
     
     args = parser.parse_args()
     
@@ -62,25 +62,50 @@ if __name__ == '__main__':
         line = line.strip()
         if len(line) <= 1:
             continue
-        elif line.startswith("##"):
-            outfile.write()
-        
-        exp = expression % tuple([temp[i] for i in columns])
-        try:
-            result = eval(exp)
-            if temp[0] == 'chr4' and result:
-                print line
-            if result == True:
-                outfile.write(line)
-            elif result == False:
-                if failfile != None:
-                    failfile.write(line)
-            else:
-                if errfile != None:
-                    errfile.write(line)
-        except:
+        elif line.startswith("#"):
+            outfile.write(line)
+            if failfile != None:
+                failfile.write(line)
             if errfile != None:
                 errfile.write(line)
+            continue
+        else:
+            line = vcfLine(line)
+            expArgs = []
+            for c in columns:
+                if c == "CHROM":
+                    line.extractChrAndPos()
+                    expArgs.append(line.chromosome)
+                elif c == "POS":
+                    line.extractChrAndPos()
+                    expArgs.append(line.position)
+                elif c == "ID":
+                    line.extractChrAndPos()
+                    expArgs.append(line.id)
+                elif c == "QUAL":
+                    line.extractQual()
+                    expArgs.append(line.qual)
+                elif c == "FILTER":
+                    line.extractFilters()
+                    expArgs.append(line.filters)
+                else:
+                    line.extractInfo()
+                    expArgs.append(line.info.get(c,"."))
+            
+            exp = expression % tuple(expArgs)
+            try:
+                result = eval(exp)
+                if result == True:
+                    outfile.write(line)
+                elif result == False:
+                    if failfile != None:
+                        failfile.write(line)
+                else:
+                    if errfile != None:
+                        errfile.write(line)
+            except:
+                if errfile != None:
+                    errfile.write(line)
     
     infile.close()
     outfile.close()

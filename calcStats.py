@@ -8,7 +8,7 @@ def tick():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Add some calculated statistics to a .vcf file\'s INFO column.')
     parser.add_argument('--data', type=str, dest="data",
-                        help='Directory housing decompressed .vcf files 1-22,X. You should have created an index by running index_kgp before running this.')
+                        help='Directory housing decompressed .vcf files 1-22,X,Y. You should have created an index by running index_kgp before running this.')
     parser.add_argument('--in', type=str, dest="infile",
                         help='input .vcf file')
     parser.add_argument('--out', type=str, dest="outfile",
@@ -95,7 +95,7 @@ if __name__ == '__main__':
                 else:
                     line.info[kgpTag].append('.')
         
-        outfile.write(str(line)+'\n')
+        outfile.write(str(line))
     
     infile.close()
     outfile.close()

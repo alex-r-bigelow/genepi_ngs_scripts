@@ -643,8 +643,6 @@ VCF_NAME=$FILTER_MODE.$VCF_NAME
 
 if [ "$PHASE" == "annotate" ]
 then
-	if [[ 0 == 1 ]]
-	then
 	echo "annotate..."
 	rm -rf $TARGET_DIR/annotation
 	mkdir $TARGET_DIR/annotation
@@ -747,8 +745,6 @@ then
 		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.log \
 		2>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/VAAST.err.log &
 	waitForJobs
-	
-	fi
 	
 	echo "...snpeff"
 	rm -rf $TARGET_DIR/annotation/snpeff
