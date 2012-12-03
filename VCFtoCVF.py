@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import argparse, os, datetime, math
-from index_kgp import vcfLine, kgpInterface, countingDict
+import argparse, datetime, math
+from genome_utils import vcfLine, countingDict
 
 class infoDetails:
     def __init__(self, id, maxCategories, separateInfoFields):

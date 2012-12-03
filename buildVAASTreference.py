@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, os
+import argparse
 
 if __name__ == '__main__':
     chromosomesToKeep = set(['chr1',

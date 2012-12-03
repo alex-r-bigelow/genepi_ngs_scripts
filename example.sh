@@ -1,6 +1,6 @@
 #!/bin/bash
 # PHASE				"setup", "align", "build_bam", "post_process", "call", "filter", "annotate", "summarize"
-export PHASE="annotate"
+export PHASE="summarize"
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
 #					contain paired *.R1.*fastq.gz and *.R2.*fastq.gz (each lane should have exactly
@@ -129,10 +129,8 @@ export VAAST_FEATURES=/raid1/sequencing/reference/vaast/refGene_hg19.gff3
 
 # ---- genepi_ngs_scripts ----
 KGP_DIR=/raid1/sequencing/reference/background/KGP/
-# KGP_DATA_DIR		( should have all the GENOTYPE (separated by chromosome) 1000 genomes .vcf files)
+# KGP_DATA_DIR		should have all the GENOTYPE (separated by chromosome) 1000 genomes .vcf.gz files
 export KGP_DATA_DIR=$KGP_DIR/compressed_vcfs
-# KGP_POP_DIR		( should have .txt files representing subpopulations of the 1000 genomes - see ./index_kgp.py --help)
-export KGP_POP_DIR=$KGP_DIR/populationLists
 
 s=`basename $0`
 ./best_practice_v4.sh >$s.log 2>$s.err.log

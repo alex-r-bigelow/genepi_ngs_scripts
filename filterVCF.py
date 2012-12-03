@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import argparse, os, sys
-from index_kgp import vcfLine, kgpInterface, countingDict
+import argparse
+from genome_utils import vcfLine, bedLine
 
 def tick():
     print ".",
@@ -18,7 +18,7 @@ if __name__ == '__main__':
                         help='File to write lines that fail --expression')
     parser.add_argument('--err', type=str, dest="errfile", nargs="?", default="",
                         help='File to write lines on which --expression generates an\nerror or produces a non-boolean result')
-    parser.add_argument('--expression', type=str, dest="expression",
+    parser.add_argument('--expression', type=str, dest="expression", nargs="?", default="",
                         help="File containing a Python-syntax expression to evaluate, e.g.:\n\n"+
                         "'%%s' == 'match this string' and %%s %% %%s == 0\n\n"+
                         "would evaluate to true (and the line would be included)\n"+
@@ -26,7 +26,7 @@ if __name__ == '__main__':
                         "exactly and the second column in --columns is an integer\n"+
                         "that can be evenly divided by the third column in --columns.\n"+
                         "Any valid python eval() code is permitted.")
-    parser.add_argument('--columns', type=str, dest="columns",
+    parser.add_argument('--columns', type=str, dest="columns", nargs="?", default="",
                         help="File containing INFO field IDs or 'CHROM', 'POS', 'ID', 'QUAL' or 'FILTER' to\n"+
                         "use in --expression. Note that CHROM will always be a string beginning\n"+
                         "with \"chr\", regardless of the .vcf format, POS will always be an integer,\n"+
@@ -35,6 +35,9 @@ if __name__ == '__main__':
                         "be a string (this could change from row to row). QUAL will be converted to a\n"+
                         "float. Any missing values will yield a string of a single period \".\"\n"+
                         "You'll need to consider conversions/error checking in your expressions.")
+    parser.add_argument('--bed', type=str, dest="bed", nargs="?", default="",
+                        help="In addition to --expression filters, this allows you to only include variants\n"+
+                        "that lie within the regions specified in a .bed file.")
     
     args = parser.parse_args()
     
@@ -47,19 +50,30 @@ if __name__ == '__main__':
     if args.errfile != "":
         errfile = open(args.errfile,'w')
     
-    tempfile = open(args.expression,'r')
-    expression = tempfile.readline()
-    tempfile.close()
+    if args.expression != "":
+        tempfile = open(args.expression,'r')
+        expression = tempfile.readline()
+        tempfile.close()
+    else:
+        expression = "True"
     
     columns = []
-    tempfile = open(args.columns, 'r')
-    for line in tempfile:
-        line = line.strip()
-        columns.append(line)
-    tempfile.close()
+    if args.columns != "":
+        tempfile = open(args.columns, 'r')
+        for line in tempfile:
+            line = line.strip()
+            columns.append(line)
+        tempfile.close()
+    
+    bedRegions = None
+    if args.bed != "":
+        bedRegions = []
+        tempfile = open(args.bed, 'r')
+        for line in tempfile:
+            bedRegions.append(bedLine(line.split()))
+        tempfile.close()
     
     for line in infile:
-        line = line.strip()
         if len(line) <= 1:
             continue
         elif line.startswith("#"):
@@ -70,7 +84,7 @@ if __name__ == '__main__':
                 errfile.write(line)
             continue
         else:
-            line = vcfLine(line)
+            line = vcfLine(line.strip().split('\t'))
             expArgs = []
             for c in columns:
                 if c == "CHROM":
@@ -92,20 +106,33 @@ if __name__ == '__main__':
                     line.extractInfo()
                     expArgs.append(line.info.get(c,"."))
             
+            # first see if it fails the .bed regions
+            if bedRegions != None:
+                passedBed = False
+                line.extractChrAndPos()
+                for bed in bedRegions:
+                    if bed.contains(line.position):
+                        passedBed = True
+                        break
+                if not passedBed:
+                    if failfile != None:
+                        failfile.write(str(line))
+                        continue
+            
             exp = expression % tuple(expArgs)
             try:
                 result = eval(exp)
                 if result == True:
-                    outfile.write(line)
+                    outfile.write(str(line))
                 elif result == False:
                     if failfile != None:
-                        failfile.write(line)
+                        failfile.write(str(line))
                 else:
                     if errfile != None:
-                        errfile.write(line)
+                        errfile.write(str(line))
             except:
                 if errfile != None:
-                    errfile.write(line)
+                    errfile.write(str(line))
     
     infile.close()
     outfile.close()

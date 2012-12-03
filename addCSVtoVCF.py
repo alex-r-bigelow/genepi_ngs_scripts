@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import argparse, os, csv
-from index_kgp import vcfLine, standardizeChromosome
+import argparse, csv
+from genome_utils import vcfLine, standardizeChromosome
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Attempts to incorporate .csv data as INFO fields in a .vcf file. '+

@@ -134,8 +134,7 @@ if	! ([ "$PHASE" == "setup" ] || \
 	[ ! -e $DBNSFP ] || \
 	[ ! -e $VAAST_BACKGROUND ] || \
 	[ ! -e $VAAST_FEATURES ] || \
-	[ ! -d $KGP_DATA_DIR ] || \
-	[ ! -e $KGP_POP_DIR ]
+	[ ! -d $KGP_DATA_DIR ]
 then
 	echo "Something is wrong with your parameters!"
 	echo "Something is wrong with your parameters!" >&2
@@ -192,11 +191,6 @@ then
 	if [ ! -e $REF_FASTA.fai ]
 	then
 		$SAM_DIR/samtools faidx $REF_FASTA &
-	fi
-	# build my KGP index if needed
-	if [ ! -e $KGP_DATA_DIR/KGP.index ]
-	then
-		python index_kgp.py --data $KGP_DATA_DIR --populations $KGP_POP_DIR &
 	fi
 	# download snpEff database for hg19
 	# this is actually really buggy! it tries to download in the wrong places, and you have to tweak a line in snpEff.config to get it to work... do this by hand!
@@ -791,8 +785,8 @@ then
 	
 	python calcStats.py \
 		--data $KGP_DATA_DIR \
-		--in $TARGET_DIR/calls/$VCF_NAME.vcf \
-		--out $TARGET_DIR/annotation/calcStats/$VCF_NAME.csv \
+		--in $TARGET_DIR/annotation/snpeff/$VCF_NAME.snpeff.vcf \
+		--out $TARGET_DIR/annotation/calcStats/$VCF_NAME.vcf \
 		>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.log \
 		2>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.err.log &
 		waitForJobs
