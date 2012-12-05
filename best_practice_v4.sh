@@ -29,7 +29,7 @@ waitForJobs ()
 # These values should be set by a temporary script that launches this one:
 # (I may add more crap when I add ANNOVAR to the mix)
 
-# PHASE				"setup", "align", "build_bam", "post_process", "call", "filter", "annotate", "summarize"
+# PHASE				"setup", "align", "build_bam", "post_process", "call", "filter", "annotate"
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
 #					contain paired *.R1.*fastq.gz and *.R2.*fastq.gz (each lane should have exactly
@@ -100,7 +100,6 @@ if	! ([ "$PHASE" == "setup" ] || \
 		[ "$PHASE" == "call" ] || \
 		[ "$PHASE" == "filter" ] || \
 		[ "$PHASE" == "annotate" ] || \
-		[ "$PHASE" == "summarize" ]) || \
 	[ ! -d $DATA_DIR ] || \
 	[ ! -d $TARGET_DIR ] || \
 	! (([ "$EXOME_OR_GENOME" == "exome" ] && [ -e $EXOME_TARGETS ]) || [ "$EXOME_OR_GENOME" == "genome" ]) || \
@@ -770,26 +769,6 @@ then
 		>$TARGET_DIR/annotation/snpeff/$VCF_NAME.snpeff.vcf \
 		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.snpeff.err.log &
 	waitForJobs
-	
-	export PHASE="summarize"
-fi
-
-if [ "$PHASE" == "summarize" ]
-then
-	echo "summarize..."
-	
-	# technically, this step should go with annotate, but I need to test it separately...
-	echo "...calcStats"
-	rm -rf $TARGET_DIR/annotation/calcStats
-	mkdir $TARGET_DIR/annotation/calcStats
-	
-	python calcStats.py \
-		--data $KGP_DATA_DIR \
-		--in $TARGET_DIR/annotation/snpeff/$VCF_NAME.snpeff.vcf \
-		--out $TARGET_DIR/annotation/calcStats/$VCF_NAME.vcf \
-		>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.log \
-		2>$TARGET_DIR/annotation/calcStats/$VCF_NAME.calcStats.err.log &
-		waitForJobs
 fi
 
 echo "done"
