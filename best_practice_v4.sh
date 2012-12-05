@@ -99,7 +99,7 @@ if	! ([ "$PHASE" == "setup" ] || \
 		[ "$PHASE" == "post_process" ] || \
 		[ "$PHASE" == "call" ] || \
 		[ "$PHASE" == "filter" ] || \
-		[ "$PHASE" == "annotate" ] || \
+		[ "$PHASE" == "annotate" ]) || \
 	[ ! -d $DATA_DIR ] || \
 	[ ! -d $TARGET_DIR ] || \
 	! (([ "$EXOME_OR_GENOME" == "exome" ] && [ -e $EXOME_TARGETS ]) || [ "$EXOME_OR_GENOME" == "genome" ]) || \
