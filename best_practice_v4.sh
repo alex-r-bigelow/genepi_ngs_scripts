@@ -29,7 +29,7 @@ waitForJobs ()
 # These values should be set by a temporary script that launches this one:
 # (I may add more crap when I add ANNOVAR to the mix)
 
-# PHASE				"setup", "align", "build_bam", "post_process", "call", "filter", "annotate"
+# PHASE				"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
 #					contain paired *.R1.*fastq.gz and *.R2.*fastq.gz (each lane should have exactly
@@ -96,6 +96,7 @@ waitForJobs ()
 if	! ([ "$PHASE" == "setup" ] || \
 		[ "$PHASE" == "align" ] || \
 		[ "$PHASE" == "build_bam" ] || \
+		[ "$PHASE" == "sort_bam" ] || \
 		[ "$PHASE" == "post_process" ] || \
 		[ "$PHASE" == "call" ] || \
 		[ "$PHASE" == "filter" ] || \
@@ -283,11 +284,16 @@ then
 		waitForJobs
 	done
 	
-	echo "...sort"
-	BYTES_PER_LANE=$(( $MAX_BYTE_MEM / $NUMLANES ))
+	export PHASE="sort_bam"
+fi
+
+if [ "$PHASE" == "sort_bam" ]
+then
+	echo "sort_bam..."
 	for i in ${SAMPLES[*]}
 	do
 		NUMLANES=`ls $DATA_DIR/$i/*R1*.gz | wc -l`
+		BYTES_PER_LANE=$(( $MAX_BYTE_MEM / $NUMLANES ))
 		for ((j=1; j<=$NUMLANES; j++))
 		do
 			$SAM_DIR/samtools sort \

@@ -1,5 +1,5 @@
 #!/bin/bash
-# PHASE				"setup", "align", "build_bam", "post_process", "call", "filter", "annotate"
+# PHASE				"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
 export PHASE="summarize"
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
