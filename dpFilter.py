@@ -1,19 +1,8 @@
 #!/usr/bin/env python
 import argparse, math
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Applies "DPfilter" to variants that are "5 or 6 sigma from the '+
-                                     'mean coverage across all samples" (see GATK best practice v4')
-    parser.add_argument('--stddev', type=int, dest="stddev",
-                        help='number of standard deviations below which a variant will PASS.')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='input .vcf file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='output .vcf file')
-    
-    args = parser.parse_args()
-    
-    sum = 0
+def run(args):
+    total = 0
     squaresum = 0
     count = 0
     print "Calculating DP standard deviation"
@@ -29,12 +18,12 @@ if __name__ == '__main__':
                 dp = i.split("=")
                 depth = int(dp[1])
                 count += 1
-                sum += depth
+                total += depth
                 squaresum += depth**2
                 break
     infile.close()
     
-    mean = float(sum)/count
+    mean = float(total)/count
     sigma = math.sqrt(float(squaresum)/count)
     print "Mean: %f Sigma: %f" % (mean,sigma)
     
@@ -71,3 +60,16 @@ if __name__ == '__main__':
     infile.close()
     outfile.close()
     print "Done"
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Applies "DPfilter" to variants that are "5 or 6 sigma from the '+
+                                     'mean coverage across all samples" (see GATK best practice v4')
+    parser.add_argument('--stddev', type=int, dest="stddev",
+                        help='number of standard deviations below which a variant will PASS.')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='input .vcf file')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='output .vcf file')
+    
+    args = parser.parse_args()
+    run(args)

@@ -284,7 +284,7 @@ then
 	done
 	
 	echo "...sort"
-	BYTES_PER_LANE=$(( $MAX_BYTE_MEM/$NUMLANES ))
+	BYTES_PER_LANE=$(( $MAX_BYTE_MEM / $NUMLANES ))
 	for i in ${SAMPLES[*]}
 	do
 		NUMLANES=`ls $DATA_DIR/$i/*R1*.gz | wc -l`

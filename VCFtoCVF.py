@@ -1,116 +1,8 @@
 #!/usr/bin/env python
 import argparse, datetime, math
-from genome_utils import vcfLine, countingDict
+from genome_utils import vcfLine, countingDict, infoDetails, MAX_INFO_STRINGS
 
-class infoDetails:
-    def __init__(self, id, maxCategories, separateInfoFields):
-        self.ranges = []    # nth column : (low,high) or None, indicating that the column exists, but there are no numerical values
-        self.categories = []    # nth column : set(possible keys) or None, indicating that the column exists, but there are no strings
-        
-        self.globalRange = None
-        self.globalCategories = None
-        
-        self.id = id
-        self.maxCategories = maxCategories
-        self.separateInfoFields = separateInfoFields
-        
-        self.maxedOut = False
-    
-    def addArbitraryValue(self, fields):
-        if not isinstance(fields,list):
-            fields = [fields]
-        for i,f in enumerate(fields):
-            try:
-                f = float(f)
-                if math.isnan(f):
-                    self.addCategory('NaN',i)
-                elif math.isinf(f):
-                    self.addCategory("Inf", i)
-                else:
-                    self.addValue(f, i)
-            except ValueError:
-                self.addCategory(f, i)
-    
-    def addValue(self, v, i):
-        while i >= len(self.ranges):
-            self.ranges.append(None)
-        if self.ranges[i] == None:
-            self.ranges[i] = (v,v)
-        else:
-            self.ranges[i] = (min(v,self.ranges[i][0]),max(v,self.ranges[i][1]))
-        if self.globalRange == None:
-            self.globalRange = (v,v)
-        else:
-            self.globalRange = (min(v,self.globalRange[0]),max(v,self.globalRange[1]))
-    
-    def addCategory(self, v, i):
-        while i >= len(self.categories):
-            self.categories.append(None)
-        if self.categories[i] == None:
-            self.categories[i] = set()
-        if self.separateInfoFields:
-            if len(self.categories[i]) > self.maxCategories:
-                self.maxedOut = True
-                return
-        else:
-            if len(self.globalCategories) > self.maxCategories:
-                self.maxedOut = True
-                return
-        self.categories[i].add(v)
-        if self.globalCategories == None:
-            self.globalCategories = set()
-        self.globalCategories.add(v)
-    
-    def hasCategory(self, value, i=None):
-        if i == None or not self.separateInfoFields:
-            return value in self.globalCategories
-        else:
-            return value in self.categories[i]
-    
-    def getPragmas(self):
-        results = []
-        for i in xrange(max(len(self.ranges),len(self.categories))):
-            pragmaString = "#\t%s %i\t" % (self.id, i+1)
-            if self.maxedOut:
-                pragmaString += "IGNORE"
-            else:
-                if self.separateInfoFields:
-                    if self.ranges[i] == None:
-                        if self.categories[i] == None:
-                            continue
-                        else:
-                            pragmaString += "CATEGORICAL\t" + "\t".join(sorted(self.categories[i]))
-                    else:
-                        if self.categories[i] == None:
-                            pragmaString += "NUMERIC\t%f\t%f" % self.ranges[i]
-                        else:
-                            pragmaString += "MIXED\t%f\t%f\t" % self.ranges[i] + "\t".join(sorted(self.categories[i]))
-                else:
-                    if self.globalRange == None:
-                        if self.globalCategories == None:
-                            continue
-                        else:
-                            pragmaString += "CATEGORICAL\t" + "\t".join(sorted(self.globalCategories))
-                    else:
-                        if self.globalCategories == None:
-                            pragmaString += "NUMERIC\t%f\t%f" % self.globalRange
-                        else:
-                            pragmaString += "MIXED\t%f\t%f\t" + self.ranges[i] + "\t".join(sorted(self.categories[i]))
-            results.append(pragmaString)
-        return results
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Creates a .cvf file from the CHROM, POS, ID, REF, ALT, QUAL, FILTER, and INFO fields of a .vcf file')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='Path to .vcf file')
-    parser.add_argument('--out', type=str, dest="outfiles", nargs="+",
-                        help='Path to .cvf file')
-    parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=50, default=50,
-                        help='Maximum number of strings a categorical INFO field can have before it\'s automatically marked as IGNORE')
-    parser.add_argument('--separate_info_fields', type=str, dest="separate_info_fields", nargs="?", const="False", default="False",
-                        help='When an INFO field has multiple comma-delimited values, count possible ranges and categories separately')
-    
-    args = parser.parse_args()
+def run(args):
     
     separateInfoFields = args.separate_info_fields.strip().lower() == "true"
     
@@ -277,3 +169,17 @@ if __name__ == '__main__':
     for p,c in sorted(sharingCounts.iteritems()):
         print "# left if variants sharing < %i/%i of the minor KGP allele are removed: %i" % (sharingFractions[p][0],sharingFractions[p][1],passedKGP-temptotal)
         temptotal += c
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Creates a .cvf file from the CHROM, POS, ID, REF, ALT, QUAL, FILTER, and INFO fields of a .vcf file')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='Path to .vcf file')
+    parser.add_argument('--out', type=str, dest="outfiles", nargs="+",
+                        help='Path to .cvf file')
+    parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=MAX_INFO_STRINGS, default=MAX_INFO_STRINGS,
+                        help='Maximum number of strings a categorical INFO field can have before it\'s automatically marked as IGNORE')
+    parser.add_argument('--separate_info_fields', type=str, dest="separate_info_fields", nargs="?", const="False", default="False",
+                        help='When an INFO field has multiple comma-delimited values, count possible ranges and categories separately')
+    
+    args = parser.parse_args()
+    run(args)

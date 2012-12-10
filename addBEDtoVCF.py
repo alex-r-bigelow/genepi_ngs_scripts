@@ -2,22 +2,7 @@
 import argparse
 from genome_utils import vcfLine, bedLine
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Attempts to incorporate .bed data as INFO fields in a .vcf file; '+
-                                    'if a variant resides in a .bed region, the score will be assigned to the variant '+
-                                    'with a tag as close to the .bed region name (INFO IDs already in the .vcf file will '+
-                                    'result in modified tags). As you could embed multiple values separated by commas, '+
-                                    'the INFO Number= parameter will be \".\" If you care about this, you\'ll need to '+
-                                    'change this yourself manually.')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='input .vcf file')
-    parser.add_argument('--bed', type=str, dest="bedfile",
-                        help='input .bed file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='output .vcf file')
-    
-    args = parser.parse_args()
-    
+def run(args):
     scoreNames = set()
     bedRegions = []
     tempfile = open(args.bedfile, 'r')
@@ -64,3 +49,20 @@ if __name__ == '__main__':
             
     vcffile.close()
     outfile.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Attempts to incorporate .bed data as INFO fields in a .vcf file; '+
+                                    'if a variant resides in a .bed region, the score will be assigned to the variant '+
+                                    'with a tag as close to the .bed region name (INFO IDs already in the .vcf file will '+
+                                    'result in modified tags). As you could embed multiple values separated by commas, '+
+                                    'the INFO Number= parameter will be \".\" If you care about this, you\'ll need to '+
+                                    'change this yourself manually.')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='input .vcf file')
+    parser.add_argument('--bed', type=str, dest="bedfile",
+                        help='input .bed file')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='output .vcf file')
+    
+    args = parser.parse_args()
+    run(args)

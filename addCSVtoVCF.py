@@ -2,32 +2,7 @@
 import argparse, csv
 from genome_utils import vcfLine, standardizeChromosome
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Attempts to incorporate .csv data as INFO fields in a .vcf file. '+
-                                    'There are some important things here that you, the .csv creator, should have '+
-                                    'taken care of before trying to add your own stats. Python is pretty flexible '+
-                                    'with figuring out delimiters on its own, but '+
-                                    'we expect at least a few things: you need a single header line, with some '+
-                                    'kind of label for each column. These labels will be used as INFO IDs as '+
-                                    'closely as possible, but if the ID already exists, we\'ll start tacking on '+
-                                    'numbers to the labels. You should also have at least a \"CHROM\" and a '+
-                                    '\"POS\" column (case sensitive). Note that exact matches are expected; '+
-                                    'if an indel position is one base pair off, that .csv data won\'t be added. You can optionally have an \"ID\" column '+
-                                    'that will override existing rs numbers in the .vcf file. As we can\'t anticipate '+
-                                    'how many values each field could have, by default the INFO Number= parameter will be '+
-                                    '\".\" If this matters to you, it should be simple to change this yourself in the .vcf '+
-                                    'header. Remember that multiple values in a single field need to be comma-delimited, so '+
-                                    'you\'ll probably want to use something else like tabs for the rest of your file. '+
-                                    'Your .csv file and .vcf file should both be sorted in the same chromosome order.')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='input .vcf file')
-    parser.add_argument('--csv', type=str, dest="csvfile",
-                        help='input .csv file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='output .vcf file')
-    
-    args = parser.parse_args()
-    
+def run(args):
     # first peek at the first 20 lines or so
     bloodhound = csv.Sniffer()
     snifflines = 20
@@ -174,3 +149,30 @@ if __name__ == '__main__':
     vcffile.close()
     csvfile.close()
     outfile.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Attempts to incorporate .csv data as INFO fields in a .vcf file. '+
+                                    'There are some important things here that you, the .csv creator, should have '+
+                                    'taken care of before trying to add your own stats. Python is pretty flexible '+
+                                    'with figuring out delimiters on its own, but '+
+                                    'we expect at least a few things: you need a single header line, with some '+
+                                    'kind of label for each column. These labels will be used as INFO IDs as '+
+                                    'closely as possible, but if the ID already exists, we\'ll start tacking on '+
+                                    'numbers to the labels. You should also have at least a \"CHROM\" and a '+
+                                    '\"POS\" column (case sensitive). Note that exact matches are expected; '+
+                                    'if an indel position is one base pair off, that .csv data won\'t be added. You can optionally have an \"ID\" column '+
+                                    'that will override existing rs numbers in the .vcf file. As we can\'t anticipate '+
+                                    'how many values each field could have, by default the INFO Number= parameter will be '+
+                                    '\".\" If this matters to you, it should be simple to change this yourself in the .vcf '+
+                                    'header. Remember that multiple values in a single field need to be comma-delimited, so '+
+                                    'you\'ll probably want to use something else like tabs for the rest of your file. '+
+                                    'Your .csv file and .vcf file should both be sorted in the same chromosome order.')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='input .vcf file')
+    parser.add_argument('--csv', type=str, dest="csvfile",
+                        help='input .csv file')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='output .vcf file')
+    
+    args = parser.parse_args()
+    run(args)

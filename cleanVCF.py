@@ -1,22 +1,8 @@
 #!/usr/bin/env python
 import argparse
-from genome_utils import vcfLine, infoDetails
+from genome_utils import vcfLine, infoDetails, MAX_INFO_STRINGS
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Cleans a .vcf file for viewing in an early version of compreheNGSive (0.2.1 - removes categorical info fields with an excessive number of possible values)')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='Path to .vcf file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='Path to .vcf file')
-    parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=40, default=40,
-                        help='Maximum number of strings a categorical INFO field can have before it\'s removed')
-    parser.add_argument('--remove_info', type=str, dest="remove_info", nargs="+",
-                        help='Remove specific field(s) from the .vcf file')
-    parser.add_argument('--preserve_info', type=str, dest="preserve_info", nargs="+",
-                        help='Only include the specified field(s) from the .vcf file (though they still can be excluded by --max_strings or --remove_info)')
-    
-    args = parser.parse_args()
-    
+def run(args):
     infoFields = {}
     
     print "Counting values...",
@@ -79,3 +65,20 @@ if __name__ == '__main__':
             outfile.write(str(line))
     infile.close()
     outfile.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Cleans a .vcf file for viewing in an early version of compreheNGSive (0.2.2 - automagically removes categorical info fields with an excessive number of possible values)')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='Path to .vcf file')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='Path to .vcf file')
+    parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=MAX_INFO_STRINGS, default=MAX_INFO_STRINGS,
+                        help='Maximum number of strings a categorical INFO field can have before it\'s removed')
+    parser.add_argument('--remove_info', type=str, dest="remove_info", nargs="+",
+                        help='Remove specific field(s) from the .vcf file')
+    parser.add_argument('--preserve_info', type=str, dest="preserve_info", nargs="+",
+                        help='Only include the specified field(s) from the .vcf file (though they still can be excluded by --max_strings or --remove_info)')
+    
+    args = parser.parse_args()
+    run(args)
+    

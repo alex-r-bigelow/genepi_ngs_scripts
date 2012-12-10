@@ -82,37 +82,7 @@ class allStats:
 def tick():
     print ".",
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Add some calculated statistics to a .vcf file\'s INFO column. For each --calculate parameter, '+
-                        'supply the population name (the header line) from either your samples (--populations) or the 1000 Genomes Project (KGP_populations.txt)')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='input .vcf file')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='output .vcf file')
-    parser.add_argument('--data', type=str, dest="data",
-                        help='Path to directory containing 1000 genomes .vcf.gz files 1-22,X,Y.')
-    parser.add_argument('--populations', type=str, dest="popFile", nargs="?", const="", default="",
-                        help='Tab-delimited .txt file containing populations in your .vcf file. A header is required, (each header is the population name), and each row under the header is a sample ID from the .vcf file indicating that that sample is a member of that population. If not supplied, all samples will be used and the population will be labeled "Samples". '+
-                        'See KGP_populations.txt for an example of how to format this file. Be careful to not reuse any of the column headers in KGP_populations.txt for your own data.')
-    parser.add_argument('--reorder_alleles', type=str, dest="reorder_alleles", nargs="?", const="ALL_KGP", default="ALL_KGP",
-                        help='The REF/ALT configuration from the sequencing pipeline is not necessarily the major/minor allele. Use '+
-                        'this option to reorder the REF/ALT configuration according to a given variant\'s frequency in a population. If the population has no data for a variant, then the REF/ALT configuration will be preserved. '+
-                        'The parameter should be a header in your --populations file or in KGP_populations.txt. If --reorder_alleles is "NO_REORDERING", no reordering will '+
-                        'take place. Default is ALL_KGP')
-    parser.add_argument('--calculate_AF', type=str, dest="calculate_AF", nargs="+",
-                        help='If True, calculates allele frequencies for every allele in each --population.')
-    parser.add_argument('--calculate_MAF', type=str, dest="calculate_MAF", nargs="+",
-                        help='Calculates allele frequencies for the minor allele (or alleles, in the case that a variant has more than one alternate '+
-                        'allele. WARNING: For a true MAF, --reorder_alleles should be set!')
-    parser.add_argument('--calculate_Sharing', type=str, dest="calculate_Sharing", nargs="+",
-                        help='If True, calculates the max possible sharing for every allele in each --population.')
-    parser.add_argument('--calculate_Minor_Sharing', type=str, dest="calculate_Minor_Sharing", nargs="+",
-                        help='If True, calculates the max possible sharing for every minor allele in each --population.')
-    parser.add_argument('--calculate_Samples_w_calls', type=str, dest="calculate_Samples_w_calls", nargs="+",
-                        help='If True, counts the number of samples have called genotypes for a variant in each --population.')
-    
-    args = parser.parse_args()
-    
+def run(args, tickFunction=tick):
     takenTags = set()
     headerline = ""
     
@@ -211,8 +181,7 @@ if __name__ == '__main__':
     
     kgp = kgpInterface(args.data,sys.path[0] + "/KGP_populations.txt")
     
-    print "Calculating..."
-    for line,kgpLine in kgp.iterateVcf(args.infile,tickFunction=tick,numTicks=1000):
+    for line,kgpLine in kgp.iterateVcf(args.infile,tickFunction=tickFunction,numTicks=1000):
         if args.reorder_alleles != "NO_REORDERING":
             if myPopulationIndices.has_key(args.reorder_alleles):
                 temp = allStats.calcAF(line, myPopulationIndices[args.reorder_alleles])
@@ -259,5 +228,35 @@ if __name__ == '__main__':
     
     infile.close()
     outfile.close()
-    print ""
-    print "Done"
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Add some calculated statistics to a .vcf file\'s INFO column. For each --calculate parameter, '+
+                        'supply the population name (the header line) from either your samples (--populations) or the 1000 Genomes Project (KGP_populations.txt)')
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='input .vcf file')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='output .vcf file')
+    parser.add_argument('--data', type=str, dest="data",
+                        help='Path to directory containing 1000 genomes .vcf.gz files 1-22,X,Y.')
+    parser.add_argument('--populations', type=str, dest="popFile", nargs="?", const="", default="",
+                        help='Tab-delimited .txt file containing populations in your .vcf file. A header is required, (each header is the population name), and each row under the header is a sample ID from the .vcf file indicating that that sample is a member of that population. If not supplied, all samples will be used and the population will be labeled "Samples". '+
+                        'See KGP_populations.txt for an example of how to format this file. Be careful to not reuse any of the column headers in KGP_populations.txt for your own data.')
+    parser.add_argument('--reorder_alleles', type=str, dest="reorder_alleles", nargs="?", const="ALL_KGP", default="ALL_KGP",
+                        help='The REF/ALT configuration from the sequencing pipeline is not necessarily the major/minor allele. Use '+
+                        'this option to reorder the REF/ALT configuration according to a given variant\'s frequency in a population. If the population has no data for a variant, then the REF/ALT configuration will be preserved. '+
+                        'The parameter should be a header in your --populations file or in KGP_populations.txt. If --reorder_alleles is "NO_REORDERING", no reordering will '+
+                        'take place. Default is ALL_KGP')
+    parser.add_argument('--calculate_AF', type=str, dest="calculate_AF", nargs="+",
+                        help='If True, calculates allele frequencies for every allele in each --population.')
+    parser.add_argument('--calculate_MAF', type=str, dest="calculate_MAF", nargs="+",
+                        help='Calculates allele frequencies for the minor allele (or alleles, in the case that a variant has more than one alternate '+
+                        'allele. WARNING: For a true MAF, --reorder_alleles should be set!')
+    parser.add_argument('--calculate_Sharing', type=str, dest="calculate_Sharing", nargs="+",
+                        help='If True, calculates the max possible sharing for every allele in each --population.')
+    parser.add_argument('--calculate_Minor_Sharing', type=str, dest="calculate_Minor_Sharing", nargs="+",
+                        help='If True, calculates the max possible sharing for every minor allele in each --population.')
+    parser.add_argument('--calculate_Samples_w_calls', type=str, dest="calculate_Samples_w_calls", nargs="+",
+                        help='If True, counts the number of samples have called genotypes for a variant in each --population.')
+    
+    args = parser.parse_args()
+    run(args)

@@ -2,44 +2,7 @@
 import argparse
 from genome_utils import vcfLine, bedLine
 
-def tick():
-    print ".",
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Extracts a subset of a .vcf file using a custom expression.\n'+
-                                                 'Note that the freedom of expression(a pun) that this program\n'+
-                                                 'allows creates a SERIOUS SECURITY RISK for anything public.\n\n'+
-                                                 'THIS PROGRAM SHOULD ONLY BE USED IN A DESKTOP ENVIRONMENT!', formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='File to filter.')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='File to write lines that pass --expression')
-    parser.add_argument('--fail', type=str, dest="failfile", nargs="?", default="",
-                        help='File to write lines that fail --expression')
-    parser.add_argument('--err', type=str, dest="errfile", nargs="?", default="",
-                        help='File to write lines on which --expression generates an\nerror or produces a non-boolean result')
-    parser.add_argument('--expression', type=str, dest="expression", nargs="?", default="",
-                        help="File containing a Python-syntax expression to evaluate, e.g.:\n\n"+
-                        "'%%s' == 'match this string' and %%s %% %%s == 0\n\n"+
-                        "would evaluate to true (and the line would be included)\n"+
-                        "if the first column in --columns matches 'match this string'\n"+
-                        "exactly and the second column in --columns is an integer\n"+
-                        "that can be evenly divided by the third column in --columns.\n"+
-                        "Any valid python eval() code is permitted.")
-    parser.add_argument('--columns', type=str, dest="columns", nargs="?", default="",
-                        help="File containing INFO field IDs or 'CHROM', 'POS', 'ID', 'QUAL' or 'FILTER' to\n"+
-                        "use in --expression. Note that CHROM will always be a string beginning\n"+
-                        "with \"chr\", regardless of the .vcf format, POS will always be an integer,\n"+
-                        "FILTER will always be a list (even if it just has one element), and INFO \n"+
-                        "fields will be a list if a comma is present in the value, otherwise it will\n"+
-                        "be a string (this could change from row to row). QUAL will be converted to a\n"+
-                        "float. Any missing values will yield a string of a single period \".\"\n"+
-                        "You'll need to consider conversions/error checking in your expressions.")
-    parser.add_argument('--bed', type=str, dest="bed", nargs="?", default="",
-                        help="In addition to --expression filters, this allows you to only include variants\n"+
-                        "that lie within the regions specified in a .bed file.")
-    
-    args = parser.parse_args()
+def run(args):
     
     infile = open(args.infile,'r')
     outfile = open(args.outfile,'w')
@@ -138,3 +101,40 @@ if __name__ == '__main__':
     outfile.close()
     if errfile != None:
         errfile.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Extracts a subset of a .vcf file using a custom expression.\n'+
+                                                 'Note that the freedom of expression(a pun) that this program\n'+
+                                                 'allows creates a SERIOUS SECURITY RISK for anything public.\n\n'+
+                                                 'THIS PROGRAM SHOULD ONLY BE USED IN A DESKTOP ENVIRONMENT!', formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('--in', type=str, dest="infile",
+                        help='File to filter.')
+    parser.add_argument('--out', type=str, dest="outfile",
+                        help='File to write lines that pass --expression')
+    parser.add_argument('--fail', type=str, dest="failfile", nargs="?", default="",
+                        help='File to write lines that fail --expression')
+    parser.add_argument('--err', type=str, dest="errfile", nargs="?", default="",
+                        help='File to write lines on which --expression generates an\nerror or produces a non-boolean result')
+    parser.add_argument('--expression', type=str, dest="expression", nargs="?", default="",
+                        help="File containing a Python-syntax expression to evaluate, e.g.:\n\n"+
+                        "'%%s' == 'match this string' and %%s %% %%s == 0\n\n"+
+                        "would evaluate to true (and the line would be included)\n"+
+                        "if the first column in --columns matches 'match this string'\n"+
+                        "exactly and the second column in --columns is an integer\n"+
+                        "that can be evenly divided by the third column in --columns.\n"+
+                        "Any valid python eval() code is permitted.")
+    parser.add_argument('--columns', type=str, dest="columns", nargs="?", default="",
+                        help="File containing INFO field IDs or 'CHROM', 'POS', 'ID', 'QUAL' or 'FILTER' to\n"+
+                        "use in --expression. Note that CHROM will always be a string beginning\n"+
+                        "with \"chr\", regardless of the .vcf format, POS will always be an integer,\n"+
+                        "FILTER will always be a list (even if it just has one element), and INFO \n"+
+                        "fields will be a list if a comma is present in the value, otherwise it will\n"+
+                        "be a string (this could change from row to row). QUAL will be converted to a\n"+
+                        "float. Any missing values will yield a string of a single period \".\"\n"+
+                        "You'll need to consider conversions/error checking in your expressions.")
+    parser.add_argument('--bed', type=str, dest="bed", nargs="?", default="",
+                        help="In addition to --expression filters, this allows you to only include variants\n"+
+                        "that lie within the regions specified in a .bed file.")
+    
+    args = parser.parse_args()
+    run(args)
