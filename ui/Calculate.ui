@@ -49,6 +49,9 @@
     <layout class="QVBoxLayout" name="verticalLayout">
      <item>
       <widget class="QTableWidget" name="tableWidget">
+       <property name="selectionMode">
+        <enum>QAbstractItemView::SingleSelection</enum>
+       </property>
        <column>
         <property name="text">
          <string>Statistic</string>
@@ -57,6 +60,11 @@
        <column>
         <property name="text">
          <string>Population</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>Notes</string>
         </property>
        </column>
       </widget>

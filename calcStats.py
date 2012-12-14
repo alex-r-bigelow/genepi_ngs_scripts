@@ -9,6 +9,12 @@ class allStats:
     Minor_Sharing = 3
     Samples_w_calls = 4
     
+    STAT_NAMES=['AF',
+                'MAF',
+                'Sharing',
+                'Minor_Sharing',
+                'Samples_w_calls']
+    
     @staticmethod
     def calculate(stat,line,indices):
         if stat == allStats.AF:
@@ -87,7 +93,7 @@ def run(args, tickFunction=tick):
     headerline = ""
     
     if args.popFile != "":
-        myPopulations = parsePopulations(args.popFile)
+        myPopulations = parsePopulations(args.popFile)[0]
     else:
         myPopulations = {"Samples":[]}
     myPopulationIndices = {}

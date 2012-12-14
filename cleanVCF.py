@@ -1,13 +1,24 @@
 #!/usr/bin/env python
-import argparse
+import argparse, gzip, os
 from genome_utils import vcfLine, infoDetails, MAX_INFO_STRINGS
 
-def run(args):
+def extractInfoFields(path,max_strings=MAX_INFO_STRINGS,tickFunction=None,numTicks=1000):
     infoFields = {}
     
-    print "Counting values...",
-    infile = open(args.infile,'r')
+    tickInterval = os.path.getsize(path)/numTicks
+    nextTick = 0
+    
+    if path.endswith('gz'):
+        infile = gzip.open(path,'rb')
+    else:
+        infile = open(path,'rb')
     for line in infile:
+        if tickFunction != None:
+            if infile.tell() > nextTick:
+                if not tickFunction():
+                    infile.close()
+                    return None
+                nextTick += tickInterval
         line = line.strip()
         if len(line) <= 1:
             continue
@@ -16,7 +27,7 @@ def run(args):
             newTag = newTag[:newTag.find(',')]
             if infoFields.has_key(newTag):
                 raise Exception("Duplicate INFO ID or use of reserved ID:\t%s" % newTag)
-            infoFields[newTag] = infoDetails(newTag, args.max_strings,separateInfoFields=False)
+            infoFields[newTag] = infoDetails(newTag, max_strings, separateInfoFields=False)
         elif line.startswith("#"):
             continue
         else:
@@ -28,6 +39,11 @@ def run(args):
                 else:
                     infoFields[k].addArbitraryValue(v)
     infile.close()
+    return infoFields
+
+def run(args):
+    print 'Counting values...'
+    infoFields = extractInfoFields(args.infile, args.max_strings)
     
     validFields = set()
     for k,f in infoFields.iteritems():
@@ -39,7 +55,7 @@ def run(args):
             continue
         validFields.add(k)
     
-    print "Creating file..."
+    print 'Writing file...'
     outfile = open(args.outfile, 'w')
     infile = open(args.infile, 'r')
     for line in infile:

@@ -1,16 +1,22 @@
 #!/usr/bin/env python
 import argparse
-from genome_utils import vcfLine, bedLine
+from genome_utils import vcfLine, bedLine, genomeException
 
-def run(args):
+def sniffBed(path):
     scoreNames = set()
     bedRegions = []
-    tempfile = open(args.bedfile, 'r')
+    tempfile = open(path, 'r')
     for line in tempfile:
         line = bedLine(line.split())
         bedRegions.append(line)
+        if not hasattr(line,'name') or not hasattr(line,'score'):
+            raise genomeException("To append scores to variants from a .bed file, each feature must have a name and score.")
         scoreNames.add(line.name)
     tempfile.close()
+    return (scoreNames,bedRegions)
+
+def run(args):
+    scoreNames,bedRegions = sniffBed(args.bedfile)
     
     vcffile = open(args.infile,'r')
     outfile = open(args.outfile,'w')

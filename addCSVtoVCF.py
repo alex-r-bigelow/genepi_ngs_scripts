@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 import argparse, csv
-from genome_utils import vcfLine, standardizeChromosome
+from genome_utils import vcfLine, genomeException, standardizeChromosome
 
-def run(args):
+def sniffCsv(path):
     # first peek at the first 20 lines or so
     bloodhound = csv.Sniffer()
     snifflines = 20
     text = []
-    csvfile = open(args.csvfile,'r')
+    csvfile = open(path,'rb')
     for x in xrange(snifflines):
         text.append(csvfile.readline())
         if text[x] == '':
@@ -16,24 +16,29 @@ def run(args):
     scent = bloodhound.sniff("".join(text))
     
     headers = text[0].strip().split(scent.delimiter)
+    if not 'CHROM' in headers or not 'POS' in headers:
+        raise genomeException('Missing CHROM or POS header in .csv file!')
     chromColumn = headers.index('CHROM')
     posColumn = headers.index('POS')
     if 'ID' in headers:
         idColumn = headers.index('ID')
     else:
         idColumn = None
+    csvfile.close()
     
+    return (scent.delimiter,headers,chromColumn,posColumn,idColumn)
+
+def run(args):
+    delimiter,headers,chromColumn,posColumn,idColumn = sniffCsv(args.csvfile)
+    
+    csvfile = open(args.csvfile,'rb')
+    csvfile.readline()  # skip the header
     # now I have to do a pass through the .csv to pull out its chromosome order (we're assuming the .csv is smaller than the .vcf)
     chromOrder = []
     allChroms = set()
-    for t in text[1:]:
-        chrom = standardizeChromosome(t.strip().split(scent.delimiter)[chromColumn])
-        if chrom not in allChroms:
-            allChroms.add(chrom)
-            chromOrder.append(chrom)
     
     for t in csvfile:
-        chrom = standardizeChromosome(t.strip().split(scent.delimiter)[chromColumn])
+        chrom = standardizeChromosome(t.strip().split(delimiter)[chromColumn])
         if chrom not in allChroms:
             allChroms.add(chrom)
             chromOrder.append(chrom)
@@ -48,7 +53,7 @@ def run(args):
     outfile = open(args.outfile,'w')
     
     cLine = csvfile.readline()  # skip the header
-    cLine = csvfile.readline().strip().split(scent.delimiter)
+    cLine = csvfile.readline().strip().split(delimiter)
     chrom = standardizeChromosome(cLine[chromColumn])
     pos = int(cLine[posColumn])
     eof = False
@@ -104,7 +109,7 @@ def run(args):
                         if text == '':
                             eof = True
                             break
-                        cLine = text.strip().split(scent.delimiter)
+                        cLine = text.strip().split(delimiter)
                         chrom = standardizeChromosome(cLine[chromColumn])
                     if eof:
                         continue
@@ -118,7 +123,7 @@ def run(args):
                 if text == '':
                     eof = True
                     break
-                cLine = text.strip().split(scent.delimiter)
+                cLine = text.strip().split(delimiter)
                 chrom = standardizeChromosome(cLine[chromColumn])
                 pos = int(cLine[posColumn])
                 if chrom != line.chromosome:

@@ -28,6 +28,35 @@ chromosomesToKeep = set(['chr1',
                          'chrX',
                          'chrY'])
 
+chromosomeOrder = ['chr1',
+                   'chr2',
+                   'chr3',
+                   'chr4',
+                   'chr5',
+                   'chr6',
+                   'chr7',
+                   'chr8',
+                   'chr9',
+                   'chr10',
+                   'chr11',
+                   'chr12',
+                   'chr13',
+                   'chr14',
+                   'chr15',
+                   'chr16',
+                   'chr17',
+                   'chr18',
+                   'chr19',
+                   'chr20',
+                   'chr21',
+                   'chr22',
+                   'chrX',
+                   'chrY',
+                   'chrM']
+
+class genomeException(Exception):
+    pass
+
 def parsePopulations(path):
     populations = {}
     infile=open(path,'rb')
@@ -40,7 +69,7 @@ def parsePopulations(path):
             if c != "":
                 populations[header[i]].append(c)
     infile.close()
-    return populations
+    return (populations,header)
 
 def standardizeChromosome(chrom):
     if not chrom.lower().startswith("chr"):
@@ -397,7 +426,7 @@ class kgpInterface:
         population structure in the 1000 genomes (popPath) - see calcStats.py --help for more
         details about its format
         '''
-        self.populations = parsePopulations(popPath)
+        self.populations = parsePopulations(popPath)[0]
         self.populationIndices = {}
         self.files = {}
         for dirname, dirnames, filenames in os.walk(dataPath):
