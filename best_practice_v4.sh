@@ -297,7 +297,6 @@ then
 		for ((j=1; j<=$NUMLANES; j++))
 		do
 			$SAM_DIR/samtools sort \
-				-m $MAX_BYTE_MEM \
 				$TARGET_DIR/alignment/$i/lane$j.unsorted.bam \
 				$TARGET_DIR/alignment/$i/lane$j \
 				>$TARGET_DIR/alignment/$i/logs/lane$j.sort.log \
