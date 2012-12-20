@@ -20,16 +20,28 @@ waitForJobs ()
 	done
 	if [[ $FAIL != 0 ]]
 	then
-		echo "A job failed in the $PHASE step!"
-		echo "A job failed in the $PHASE step!" >&2
+		echo "A job failed in the $PHASE_START step!"
+		echo "A job failed in the $PHASE_START step!" >&2
 		exit 1
 	fi
+}
+
+finish ()
+{
+	echo "Finished jobs"
+	if [ $PHASE_STOP != "" ]
+	then
+		echo "Stopped before the $PHASE_STOP step"
+	fi
+	exit 1
 }
 
 # These values should be set by a temporary script that launches this one:
 # (I may add more crap when I add ANNOVAR to the mix)
 
-# PHASE				"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
+# PHASE_START		"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
+# PHASE_STOP		"align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate", ""
+#
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
 #					contain paired *.R1.*fastq.gz and *.R2.*fastq.gz (each lane should have exactly
@@ -93,14 +105,22 @@ waitForJobs ()
 
 # ******** Some initial variable verifying/twisting that always happens ********
 # verify all our required parameters are valid
-if	! ([ "$PHASE" == "setup" ] || \
-		[ "$PHASE" == "align" ] || \
-		[ "$PHASE" == "build_bam" ] || \
-		[ "$PHASE" == "sort_bam" ] || \
-		[ "$PHASE" == "post_process" ] || \
-		[ "$PHASE" == "call" ] || \
-		[ "$PHASE" == "filter" ] || \
-		[ "$PHASE" == "annotate" ]) || \
+if	! ([ "$PHASE_START" == "setup" ] || \
+		[ "$PHASE_START" == "align" ] || \
+		[ "$PHASE_START" == "build_bam" ] || \
+		[ "$PHASE_START" == "sort_bam" ] || \
+		[ "$PHASE_START" == "post_process" ] || \
+		[ "$PHASE_START" == "call" ] || \
+		[ "$PHASE_START" == "filter" ] || \
+		[ "$PHASE_START" == "annotate" ]) || \
+	! ([ "$PHASE_STOP" == "align" ] || \
+		[ "$PHASE_STOP" == "build_bam" ] || \
+		[ "$PHASE_STOP" == "sort_bam" ] || \
+		[ "$PHASE_STOP" == "post_process" ] || \
+		[ "$PHASE_STOP" == "call" ] || \
+		[ "$PHASE_STOP" == "filter" ] || \
+		[ "$PHASE_STOP" == "annotate" ] || \
+		[ "$PHASE_STOP" == "" ]) || \
 	[ ! -d $DATA_DIR ] || \
 	[ ! -d $TARGET_DIR ] || \
 	! (([ "$EXOME_OR_GENOME" == "exome" ] && [ -e $EXOME_TARGETS ]) || [ "$EXOME_OR_GENOME" == "genome" ]) || \
@@ -175,7 +195,7 @@ waitForJobs
 
 #******** Actual jobs start here ********
 
-if [ "$PHASE" == "setup" ]
+if [ "$PHASE_START" == "setup" ]
 then
 	echo "setup..."
 	
@@ -207,10 +227,15 @@ then
 	waitForJobs
 	mkdir $TARGET_DIR
 	
-	export PHASE="align"
+	export PHASE_START="align"
 fi
 
-if [ "$PHASE" == "align" ]
+if [ "$PHASE_STOP" == "align" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "align" ]
 then
 	echo "align..."
 	rm -rf $TARGET_DIR/alignment
@@ -248,10 +273,15 @@ then
 		done
 	done
 	
-	export PHASE="build_bam"
+	export PHASE_START="build_bam"
 fi
 
-if [ "$PHASE" == "build_bam" ]
+if [ "$PHASE_STOP" == "build_bam" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "build_bam" ]
 then
 	echo "build_bam..."
 	for i in ${SAMPLES[*]}
@@ -284,10 +314,15 @@ then
 		waitForJobs
 	done
 	
-	export PHASE="sort_bam"
+	export PHASE_START="sort_bam"
 fi
 
-if [ "$PHASE" == "sort_bam" ]
+if [ "$PHASE_STOP" == "sort_bam" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "sort_bam" ]
 then
 	echo "sort_bam..."
 	for i in ${SAMPLES[*]}
@@ -324,13 +359,18 @@ then
 			$ALLLANES \
 			>$TARGET_DIR/alignment/$i/logs/merge.log \
 			2>$TARGET_DIR/alignment/$i/logs/merge.err.log &
+		waitForJobs
 	done
-	waitForJobs
 	
-	export PHASE="post_process"
+	export PHASE_START="post_process"
 fi
 
-if [ "$PHASE" == "post_process" ]
+if [ "$PHASE_STOP" == "post_process" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "post_process" ]
 then
 	echo "post_process..."
 	echo "...dedup"
@@ -348,8 +388,8 @@ then
 			>$TARGET_DIR/dedup/logs/$i.log \
 			2>$TARGET_DIR/dedup/logs/$i.err.log &
 	done
-	
 	waitForJobs
+	
 	echo "...index"
 	for i in ${SAMPLES[*]}
 	do
@@ -447,10 +487,15 @@ then
 	done
 	waitForJobs
 	
-	export PHASE="call"
+	export PHASE_START="call"
 fi
 
-if [ "$PHASE" == "call" ]
+if [ "$PHASE_STOP" == "call" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "call" ]
 then
 	echo "call..."
 	rm -rf $TARGET_DIR/calls
@@ -527,10 +572,15 @@ then
 		waitForJobs
 	fi
 	
-	export PHASE="filter"
+	export PHASE_START="filter"
 fi
 
-if [ "$PHASE" == "filter" ]
+if [ "$PHASE_STOP" == "filter" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "filter" ]
 then
 	echo "filter..."
 	
@@ -633,13 +683,18 @@ then
 		>$TARGET_DIR/calls/logs/pass.$VCF_NAME.dpFilter.log \
 		2>$TARGET_DIR/calls/logs/pass.$VCF_NAME.dpFilter.err.log &
 	waitForJobs
-	export PHASE="annotate"
+	export PHASE_START="annotate"
 fi
 
 # At this point, the .vcf files with caps are ready for analysis elsewhere... FILTER_MODE will decide which one gets annotated
 VCF_NAME=$FILTER_MODE.$VCF_NAME
 
-if [ "$PHASE" == "annotate" ]
+if [ "$PHASE_STOP" == "annotate" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "annotate" ]
 then
 	echo "annotate..."
 	rm -rf $TARGET_DIR/annotation

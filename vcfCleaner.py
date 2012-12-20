@@ -2,16 +2,61 @@
 import sys, os, webbrowser
 from PySide.QtCore import Qt, QFile
 from PySide.QtUiTools import QUiLoader
-from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem
+from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem, QTreeWidgetItem, QPushButton
 from genome_utils import genomeException, parsePopulations, MAX_INFO_STRINGS
 from cleanVCF import extractInfoFields
 from addCSVtoVCF import sniffCsv
 from addBEDtoVCF import sniffBed
 from calcStats import allStats
 
-RESERVED_TAGS = ["CHROM","POS","ID"]
+RESERVED_TAGS = ["CHROM","POS","ID","QUAL","FILTER"]
 
-class attribute:
+class sample(object):
+    def __init__(self, name, sourcePop):
+        self.name = name
+        self.sourcePop = sourcePop
+        self.globalName = '%s (%s)' % (name, sourcePop.globalName)
+    
+    def __hash__(self):
+        return hash(self.globalName)
+    
+    def __eq__(self, other):
+        return isinstance(other, sample) and self.name == other.name and self.sourcePop == other.sourcePop
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+class population(object):
+    def __init__(self, name, allSamples, source=False):
+        self.name = name
+        self.samples = []
+        self.source = source
+        self.globalName = name
+        
+        self.allSamples = allSamples
+    
+    def addSample(self, s):
+        if self.source:
+            assert not isinstance(s,sample)
+            s = sample(s,self)
+        else:
+            assert isinstance(s,sample)
+        self.samples.append(s)
+        return s
+    
+    def __repr__(self):
+        return self.name
+    
+    def __eq__(self, other):
+        return isinstance(other, population) and self.name == other.name and self.filePath == other.filePath
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def addSamplesToPop(self):
+        print self.name
+
+class attribute(object):
     def __init__(self, name, sourcePath, additionalText=""):
         self.name = name
         self.sourcePath = sourcePath
@@ -33,23 +78,25 @@ class attribute:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-class statistic:
-    def __init__(self, function, population,note=""):
+class statistic(object):
+    def __init__(self, targetPop, function, backPop, ascending, description=""):
+        self.targetPop = targetPop
         self.function = function
-        self.population = population
-        self.globalName = self.population + "_" + self.function
-        self.note=note
+        self.backPop = backPop
+        self.ascending = ascending
+        self.description = description
+        self.globalName = self.targetPop + "_" + self.function + "_" + ('ASC' if self.ascending else 'DEC') + '_' + self.backPop
     
     def __repr__(self):
         return self.globalName
     
     def __eq__(self, other):
-        return isinstance(other,statistic) and self.function == other.function and self.population == other.population and self.note == other.note
+        return isinstance(other,statistic) and self.targetPop == other.targetPop and self.function == other.function and self.backPop == other.backPop and self.ascending == other.ascending
     
     def __ne__(self, other):
         return not self.__eq__(other)
 
-class filterExpression:
+class filterExpression(object):
     def __init__(self, expression, columns):
         self.expression = expression
         self.columns = columns
@@ -64,7 +111,7 @@ class filterExpression:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-class filterBed:
+class filterBed(object):
     def __init__(self, path):
         self.path = path
     
@@ -78,7 +125,7 @@ class filterBed:
     def __ne__(self, other):
         return not self.__eq__(other)
 
-class fieldBit:
+class fieldBit(object):
     def __init__(self, field):
         self.field = field
 
@@ -89,22 +136,18 @@ class gui:
         infile.open(QFile.ReadOnly)
         self.window = self.loader.load(infile, None)
         infile.close()
-        
-        self.childWindow = None
-        self.childWidgets = []
-        
+                
         # data structures
-        self.populationFiles = set()
-        self.populationOrder = []
+        self.popButtonBag = set()   # I get some strange seg fault errors due to some pyside garbage collection bug... I need to keep a pointer to
+                                    # buttons I create dynamically to avoid this
+        
+        self.samples = {}
         self.populations = {}
-        self.lastBackgroundPopIndex = 0
-        self.loadPopulations(sys.path[0] + "/KGP_populations.txt")
+        self.loadPopulations(sys.path[0] + "/KGP_populations.txt", source=True)
         
         self.variantFilters = []
         
         self.infoFields = {}
-        self.hasValidInput = False
-        self.hasValidOutput = False
         
         self.includedAttributes = [] # contains actual attribute objects
         self.removedAttributes = [] # contains actual attribute objects
@@ -116,20 +159,37 @@ class gui:
         
         self.calculatedAttributes = []
         
-        self.window.allAttributeComboBox.addItem("")
-        self.window.allAttributeComboBox.addItems(RESERVED_TAGS)
-        
-        # set up GUI
+        # set up GUI - Data Sources Tab
         self.window.browseVcfButton.clicked.connect(self.browseVcf)
+        self.window.browseKgpButton.clicked.connect(self.browseKGP)
         self.window.browseOutputButton.clicked.connect(self.browseOutput)
+        self.window.browseLogButton.clicked.connect(self.browseLog)
+        self.window.browseErrorButton.clicked.connect(self.browseError)
+        self.window.browseNonBiallelicButton.clicked.connect(self.browseNonBiallelic)
+        self.window.compressOutputCheckbox.stateChanged.connect(self.compressOutput)
         
-        self.window.populationComboBox.currentIndexChanged.connect(self.changePopulation)
+        self.window.browsePopulationButton.clicked.connect(self.browsePopulation)
+        self.window.savePopulationButton.clicked.connect(self.savePopulation)
+        self.window.createPopulationButton.clicked.connect(self.createPopulation)
+        self.window.removePopOrSampleButton.clicked.connect(self.removePopOrSample)
         
+        # Because the "Add Sample(s) to Population" and "Remove" buttons are created dynamically, we bind
+        # the methods later, but I need to remember to bind to self.addSampleToPop and call self.removePopOrSample
+        # appropriately
+        
+        # set up GUI - Attribute Settings Tab
         self.window.includeAttributeList.itemSelectionChanged.connect(self.changeIncludeAttribute)
         self.window.removeAttributeButton.clicked.connect(self.removeAttributes)
         
         self.window.removeInfoList.itemSelectionChanged.connect(self.changeRemoveInfo)
         self.window.addInfoButton.clicked.connect(self.addInfo)
+        
+        self.window.functionComboBox.currentIndexChanged.connect(self.calculateEnable)
+        self.window.targetPopComboBox.currentIndexChanged.connect(self.calculateEnable)
+        self.window.alleleReorderRadioButton.clicked.connect(self.calculateEnable)
+        self.window.alleleVcfOrderRadioButton.clicked.connect(self.calculateEnable)
+        self.window.backPopComboBox.currentIndexChanged.connect(self.calculateEnable)
+        self.window.createAttributeButton.clicked.connect(self.createAttribute)
         
         self.window.browseCsvButton.clicked.connect(self.browseCsv)
         self.window.csvColumnList.itemSelectionChanged.connect(self.changeCsvColumn)
@@ -139,12 +199,12 @@ class gui:
         self.window.bedScoreList.itemSelectionChanged.connect(self.changeBedScore)
         self.window.addBedScoreButton.clicked.connect(self.addBedAttribute)
         
-        self.window.calculateAdditionalButton.clicked.connect(self.addAdditionalAttribute)
-        
+        # set up GUI - Variant Filters Tab
         self.window.filterList.itemSelectionChanged.connect(self.changeFilter)
         self.window.removeFilterButton.clicked.connect(self.removeFilter)
         self.window.browseBedFilterButton.clicked.connect(self.addBedFilter)
         self.window.allAttributeComboBox.currentIndexChanged.connect(self.insertAttribute)
+        self.window.presetFiltersComboBox.currentIndexChanged.connect(self.switchToPresetFilter)
         self.window.addExpressionFilterButton.clicked.connect(self.addExpressionFilter)
         
         self.window.helpButton.clicked.connect(self.openHelpPage)
@@ -155,48 +215,187 @@ class gui:
         
         self.window.show()
     
-    def loadPopulations(self, path):
-        if path in self.populationFiles:
-            return
-        self.populationFiles.add(path)
-        
-        self.populationOrder.append(None)#(os.path.split(path)[1]))
-        newPops,popOrder = parsePopulations(path)
-        for k in popOrder:
-            p = newPops[k]
-            temp = k
-            appendDigit = 2
-            while self.populations.has_key(temp):
-                temp = "%s_#%i" % (k, appendDigit)
-                appendDigit += 1
-            self.populations[temp] = (p,path)
-            self.populationOrder.append(temp)
-        
-        self.lastBackgroundPopIndex = max(0,self.window.populationComboBox.currentIndex())
-        
-        self.window.populationComboBox.clear()
-        for i,p in enumerate(self.populationOrder):
-            if p == None:
-                if not i == 0:
-                    #self.window.populationComboBox.addItem(p[0])
-                    self.window.populationComboBox.insertSeparator(i)   # TODO: put the file name in instead
-            else:
-                self.window.populationComboBox.addItem(p)
-        
-        self.window.populationComboBox.insertSeparator(self.window.populationComboBox.count()+1)
-        self.window.populationComboBox.addItem('Load population .txt file...')
-        self.window.populationComboBox.setCurrentIndex(self.lastBackgroundPopIndex)
-        
-        for w in self.childWidgets:
-            w.clear()
-            for i,p in enumerate(self.populationOrder):
-                if p == None:
-                    if not i == 0:
-                        #self.window.populationComboBox.addItem(p[0])
-                        self.window.populationComboBox.insertSeparator(i)   # TODO: put the file name in instead
-                else:
-                    self.window.populationComboBox.addItem(p)
+    # ***** Helper methods *****
     
+    def loadPopulations(self, path, source=False):
+        newPops,popOrder = parsePopulations(path)
+        
+        popsToAdd = []
+        
+        for k in popOrder:
+            newPop = population(k,self.samples,source)
+            appendDigit = 2
+            while self.populations.has_key(newPop.globalName):
+                newPop.globalName = "%s_#%i" % (k, appendDigit)
+                appendDigit += 1
+            for s in newPops[k]:
+                if source:
+                    s = newPop.addSample(s)
+                    self.samples[s.name] = s    # This could potentially overwrite sample names we already loaded; this is okay (we'll already have
+                                                # set up KGP samples, and the natural assumption is that a user-defined group will use the last-loaded
+                                                # user data; the user can tweak this if it doesn't import how they expect)
+                else:
+                    if not self.samples.has_key(s):
+                        m = QMessageBox()
+                        m.setText("Couldn't load population file; unknown sample: %s" % s)
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
+                        return
+                    else:
+                        newPop.addSample(self.samples[s])
+            popsToAdd.append(newPop)
+        # Now that we loaded without an error, we can add the populations
+        for p in popsToAdd:
+            self.populations[p.globalName] = p
+        
+        self.updatePopLists()
+    
+    def updatePopLists(self):
+        popOrder = sorted(self.populations.iterkeys())
+        for cBox in [self.window.targetPopComboBox,self.window.backPopComboBox]:
+            cBox.clear()
+            cBox.addItem("Select...")
+            for p in popOrder:
+                cBox.addItem(p)
+            cBox.setCurrentIndex(0)
+        
+        self.window.treeWidget.clear()
+        self.popButtonBag = set()
+        
+        for p in reversed(popOrder):
+            pop = self.populations[p]
+            parent = QTreeWidgetItem([p,''])
+            self.window.treeWidget.insertTopLevelItem(0,parent)
+            if pop.source:
+                parent.setFlags(parent.flags() & Qt.ItemIsEnabled)
+                addSamplesToPopButton = QPushButton('Add Samples...')
+                self.popButtonBag.add(addSamplesToPopButton)    # a hack to keep a pointer to the button around... otherwise we seg fault
+                addSamplesToPopButton.setDisabled(True) # these are here just for decoration
+                self.window.treeWidget.setItemWidget(parent,1,addSamplesToPopButton)
+                for s in pop.samples:
+                    child = QTreeWidgetItem(parent)
+                    child.setText(0,s.name)
+                    child.setFlags(child.flags() & Qt.ItemIsEnabled)
+            else:
+                parent.setFlags(parent.flags() | Qt.ItemIsEditable)
+                addSamplesToPopButton = QPushButton('Add Samples...')
+                self.popButtonBag.add(addSamplesToPopButton)    # a hack to keep a pointer to the button around... otherwise we seg fault
+                self.window.treeWidget.setItemWidget(parent,1,addSamplesToPopButton)
+                addSamplesToPopButton.clicked.connect(pop.addSamplesToPop)
+                for s in pop.samples:
+                    child = QTreeWidgetItem(parent)
+                    child.setText(0,s.globalName)
+    
+    def globalEnable(self):
+        if os.path.exists(self.window.vcfPathField.getText()) and self.window.outputPathField != "":
+            self.window.tabWidget.widget(1).setEnabled(True)
+            self.window.tabWidget.widget(2).setEnabled(True)
+        else:
+            self.window.tabWidget.widget(1).setEnabled(False)
+            self.window.tabWidget.widget(2).setEnabled(False)
+        
+        '''if self.hasValidOutput:
+            if self.window.outputPathField.text().endswith("vcf"):
+                self.window.vcfAlleleSettings.show()
+                self.window.csvAlleleSettings.hide()
+            else:
+                self.window.vcfAlleleSettings.hide()
+                self.window.csvAlleleSettings.show()
+            
+            self.window.generalSettingsPanel.setEnabled(True)
+            self.window.tabWidget.widget(2).setEnabled(True)
+        else:
+            self.window.vcfAlleleSettings.hide()
+            self.window.csvAlleleSettings.show()
+            
+            self.window.generalSettingsPanel.setEnabled(False)
+            self.window.tabWidget.widget(2).setEnabled(False)
+        
+        if self.hasValidInput and self.hasValidOutput:
+            self.window.runButton.setEnabled(True)
+        else:
+            self.window.runButton.setEnabled(False)'''
+    
+    # ***** GUI Bindings *****
+    def browseVcf(self):
+        pass
+    def browseKGP(self):
+        pass
+    def browseOutput(self):
+        pass
+    def browseLog(self):
+        pass
+    def browseError(self):
+        pass
+    def browseNonBiallelic(self):
+        pass
+    def compressOutput(self):
+        pass
+    
+    def browsePopulation(self):
+        pass
+    def savePopulation(self):
+        pass
+    def createPopulation(self):
+        pass
+    def removePopOrSample(self):
+        pass
+    
+    
+    
+    def changeIncludeAttribute(self):
+        pass
+    def removeAttributes(self):
+        pass
+    
+    def changeRemoveInfo(self):
+        pass
+    def addInfo(self):
+        pass
+    
+    def calculateEnable(self):
+        pass
+    def createAttribute(self):
+        pass
+    
+    def browseCsv(self):
+        pass
+    def changeCsvColumn(self):
+        pass
+    def addCsvAttribute(self):
+        pass
+    
+    def browseBed(self):
+        pass
+    def changeBedScore(self):
+        pass
+    def addBedAttribute(self):
+        pass
+    
+    # set up GUI - Variant Filters Tab
+    def changeFilter(self):
+        pass
+    def removeFilter(self):
+        pass
+    def addBedFilter(self):
+        pass
+    def insertAttribute(self):
+        pass
+    def switchToPresetFilter(self):
+        pass
+    def addExpressionFilter(self):
+        pass
+    
+    def openHelpPage(self):
+        pass
+    def quit(self):
+        pass
+    def run(self):
+        pass
+
+
+
+    '''
     def globalEnable(self):
         if self.hasValidInput:
             self.window.tabWidget.widget(1).setEnabled(True)
@@ -293,7 +492,7 @@ class gui:
             attr.globalName = temp
             takenTags.add(temp)
         
-    # GUI Event handlers
+    # ***** GUI Event handlers ******
     def browseVcf(self):
         fileName = QFileDialog.getOpenFileName(caption=u"Open .vcf file", filter=u"Variant Call Files (*.vcf)")[0]
         if fileName == '':
@@ -367,6 +566,24 @@ class gui:
         self.window.outputPathField.setText(fileName)
         self.hasValidOutput = True
         self.globalEnable()
+    
+    def compressOutput(self):
+        pass
+    
+    def browseKGP(self):
+        pass
+    
+    def browsePopulation(self):
+        pass
+    
+    def savePopulation(self):
+        pass
+    
+    def createPopulation(self):
+        pass
+    
+    def removePopOrSample(self):
+        pass
     
     def askForPopFile(self):
         temp = self.lastBackgroundPopIndex
@@ -651,7 +868,7 @@ class gui:
     
     def run(self):
         # TODO: sort all the files, reorder alleles
-        self.window.accept()
+        self.window.accept()'''
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

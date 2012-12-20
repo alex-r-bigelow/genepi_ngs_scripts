@@ -1,6 +1,12 @@
 #!/bin/bash
-# PHASE				"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
-export PHASE="summarize"
+# PHASE_START		"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
+#					Phase to begin with - most of the time it will be align unless you've added a new reference genome
+#					you're restarting after a crash
+export PHASE="align"
+# PHASE_STOP		"align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate", ""
+#					Phase before which to end... "" will run the whole pipeline. Useful for debugging
+export PHASE_STOP=""
+
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these
 #					names will be reused all the way past the call phase). Each subdirectory should
 #					contain paired *.R1.*fastq.gz and *.R2.*fastq.gz (each lane should have exactly
