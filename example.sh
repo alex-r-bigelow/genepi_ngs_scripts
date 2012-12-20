@@ -133,10 +133,5 @@ export VAAST_BACKGROUND=/raid1/sequencing/reference/background/vaast/1KG_refGene
 # VAAST_FEATURES
 export VAAST_FEATURES=/raid1/sequencing/reference/vaast/refGene_hg19.gff3
 
-# ---- genepi_ngs_scripts ----
-KGP_DIR=/raid1/sequencing/reference/background/KGP/
-# KGP_DATA_DIR		should have all the GENOTYPE (separated by chromosome) 1000 genomes .vcf.gz files
-export KGP_DATA_DIR=$KGP_DIR/compressed_vcfs
-
 s=`basename $0`
-./best_practice_v4.sh >$s.log 2>$s.err.log
+/raid1/sequencing/apps/wrapper/genepi_ngs_scripts/best_practice_v4.sh >$s.log 2>$s.err.log

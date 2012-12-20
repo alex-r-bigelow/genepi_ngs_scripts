@@ -4,10 +4,8 @@
 # By default, UnifiedGenotyper is used for variant calling, but this can be changed by supplying a number as
 # a parameter to this script (the number, if it exists, will be used as the --minPruning option for haplotypeCaller)
 
-# Redirect DATA_DIR and TARGET_DIR for another project (currently works for the cll project)
+# ******** Helper Functions ********
 
-
-# ******** Helper Function ********
 # this will make the whole script fail if any piece does
 # (also waits for multiple parallel jobs to finish before
 # continuing)
@@ -98,9 +96,6 @@ finish ()
 # ---- VAAST ----
 # VAAST_BACKGROUND
 # VAAST_FEATURES
-# ---- genepi_ngs_scripts ----
-# KGP_DATA_DIR		( should have all the GENOTYPE (separated by chromosome) 1000 genomes .vcf files)
-# KGP_POP_DIR		( should have .txt files representing subpopulations of the 1000 genomes - see ./index_kgp.py --help)
 
 
 # ******** Some initial variable verifying/twisting that always happens ********
@@ -153,8 +148,7 @@ if	! ([ "$PHASE_START" == "setup" ] || \
 	[ ! -e $GWAS_CAT ] || \
 	[ ! -e $DBNSFP ] || \
 	[ ! -e $VAAST_BACKGROUND ] || \
-	[ ! -e $VAAST_FEATURES ] || \
-	[ ! -d $KGP_DATA_DIR ]
+	[ ! -e $VAAST_FEATURES ]
 then
 	echo "Something is wrong with your parameters!"
 	echo "Something is wrong with your parameters!" >&2
@@ -664,19 +658,19 @@ then
 	waitForJobs
 	
 	echo "...manual DP Filter"
-	python dpFilter.py \
+	python ${0%best_practice_v4.sh}dpFilter.py \
 		--stddev 5 \
 		--in $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
 		--out $TARGET_DIR/calls/ALL.$VCF_NAME.vcf \
 		>$TARGET_DIR/calls/logs/all.$VCF_NAME.dpFilter.log \
 		2>$TARGET_DIR/calls/logs/all.$VCF_NAME.dpFilter.err.log &
-	python dpFilter.py \
+	python ${0%best_practice_v4.sh}dpFilter.py \
 		--stddev 5 \
 		--in $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf \
 		--out $TARGET_DIR/calls/PURGED.$VCF_NAME.vcf \
 		>$TARGET_DIR/calls/logs/purged.$VCF_NAME.dpFilter.log \
 		2>$TARGET_DIR/calls/logs/purged.$VCF_NAME.dpFilter.err.log &
-	python dpFilter.py \
+	python ${0%best_practice_v4.sh}dpFilter.py \
 		--stddev 5 \
 		--in $TARGET_DIR/calls/pass.$VCF_NAME.filtered.vcf \
 		--out $TARGET_DIR/calls/PASS.$VCF_NAME.vcf \
