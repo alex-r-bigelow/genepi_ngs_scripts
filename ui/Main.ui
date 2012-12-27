@@ -130,15 +130,27 @@
          <property name="selectionMode">
           <enum>QAbstractItemView::MultiSelection</enum>
          </property>
+         <property name="rootIsDecorated">
+          <bool>true</bool>
+         </property>
+         <property name="uniformRowHeights">
+          <bool>false</bool>
+         </property>
+         <property name="itemsExpandable">
+          <bool>true</bool>
+         </property>
          <property name="animated">
           <bool>true</bool>
          </property>
          <property name="headerHidden">
-          <bool>true</bool>
+          <bool>false</bool>
          </property>
          <property name="columnCount">
           <number>2</number>
          </property>
+         <attribute name="headerVisible">
+          <bool>true</bool>
+         </attribute>
          <attribute name="headerDefaultSectionSize">
           <number>300</number>
          </attribute>
@@ -150,12 +162,12 @@
          </attribute>
          <column>
           <property name="text">
-           <string>Name</string>
+           <string/>
           </property>
          </column>
          <column>
           <property name="text">
-           <string>Buttons</string>
+           <string/>
           </property>
          </column>
         </widget>
@@ -205,20 +217,6 @@
            </property>
           </spacer>
          </item>
-         <item>
-          <widget class="QPushButton" name="browsePopulationButton">
-           <property name="text">
-            <string>Import...</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="savePopulationButton">
-           <property name="text">
-            <string>Export...</string>
-           </property>
-          </widget>
-         </item>
         </layout>
        </item>
        <item row="3" column="0">
@@ -229,7 +227,10 @@
         </widget>
        </item>
        <item row="7" column="0">
-        <widget class="QWidget" name="widget_2" native="true">
+        <widget class="QWidget" name="saveNonBiallelicWidget" native="true">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
          <layout class="QHBoxLayout" name="horizontalLayout_19">
           <property name="margin">
            <number>0</number>
@@ -332,7 +333,10 @@
         </widget>
        </item>
        <item row="6" column="0">
-        <widget class="QWidget" name="widget_3" native="true">
+        <widget class="QWidget" name="saveErrorWidget" native="true">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
          <layout class="QHBoxLayout" name="horizontalLayout_20">
           <property name="margin">
            <number>0</number>
@@ -383,7 +387,7 @@
           <item row="5" column="1">
            <widget class="QCheckBox" name="compressOutputCheckbox">
             <property name="text">
-             <string>Compress all output</string>
+             <string>Compress output</string>
             </property>
            </widget>
           </item>
@@ -466,9 +470,9 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QLabel" name="label_6">
+             <widget class="QLabel" name="removeAttrLabel">
               <property name="text">
-               <string>Remove these existing INFO attributes:</string>
+               <string>Remove these INFO attributes:</string>
               </property>
              </widget>
             </item>
@@ -900,6 +904,13 @@
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_11">
          <item>
+          <widget class="QLabel" name="label_6">
+           <property name="text">
+            <string>Exclude variants that fail any of:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QListWidget" name="filterList">
            <property name="selectionMode">
             <enum>QAbstractItemView::SingleSelection</enum>
@@ -931,6 +942,13 @@
           </layout>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="Line" name="line_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </widget>
        </item>
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_12">
@@ -971,16 +989,25 @@
          <item>
           <widget class="QGroupBox" name="groupBox_5">
            <property name="title">
-            <string>Remove variants by expression:</string>
+            <string>Remove variants with Python function:</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_4">
             <item>
              <widget class="QTextEdit" name="expressionField">
               <property name="minimumSize">
                <size>
-                <width>768</width>
+                <width>668</width>
                 <height>0</height>
                </size>
+              </property>
+              <property name="font">
+               <font>
+                <family>Courier</family>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="lineWrapMode">
+               <enum>QTextEdit::NoWrap</enum>
               </property>
              </widget>
             </item>

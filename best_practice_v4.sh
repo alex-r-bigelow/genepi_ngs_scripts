@@ -4,6 +4,9 @@
 # By default, UnifiedGenotyper is used for variant calling, but this can be changed by supplying a number as
 # a parameter to this script (the number, if it exists, will be used as the --minPruning option for haplotypeCaller)
 
+# You should never run this script directly; see example.sh for an example of how to launch this script; you should make
+# a copy of example.sh and tweak it for every distinct run you do
+
 # ******** Helper Functions ********
 
 # this will make the whole script fail if any piece does
@@ -24,6 +27,7 @@ waitForJobs ()
 	fi
 }
 
+# this allows the script to end early (when the PHASE_STOP parameter is set to something other than "")
 finish ()
 {
 	echo "Finished jobs"
@@ -35,7 +39,7 @@ finish ()
 }
 
 # These values should be set by a temporary script that launches this one:
-# (I may add more crap when I add ANNOVAR to the mix)
+# (I may add more crap if I add ANNOVAR to the mix)
 
 # PHASE_START		"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
 # PHASE_STOP		"align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate", ""
@@ -64,7 +68,8 @@ finish ()
 #					PASS all filters (except the DP Filter, which is applied by hand afterward)
 # VST_SET_OP		String to give VST for combining individuals
 
-# Paths to the main directory of each app:
+# Paths to the main directory of each app (I allow multiple paths to VAAST programs as I've been using the
+# bleeding-edge beta version and I sometimes have to experiment with different versions):
 # JAVA
 # BWA_DIR
 # SAM_DIR
@@ -81,7 +86,9 @@ finish ()
 # Paths to reference files:
 # --- Reference genomes ----
 # REF_FASTA
-# VAAST_FASTA		VAAST doesn't cooperate well with reference genomes other than what they give you
+# VAAST_FASTA		VAAST usually doesn't cooperate well with reference genomes other than what they give you;
+#					if you run buildVAASTreference.py, you might get it to cooperate with the same reference
+#					genome that you use for the rest of the pipeline... but no guarantees here
 # --- GATK bundle ---
 # REF_DBSNP_129
 # REF_DBSNP
@@ -89,8 +96,14 @@ finish ()
 # REF_KGP
 # REF_HAPMAP
 # REF_OMNI
-# (EXOME_TARGETS - see above)
 # ---- snpEff ----
+# snpEff's files are a little tricky - for the main snpeff run, you need to download its
+# main database via snpEff on the command line:
+#
+# -jar snpEff.jar download -v hg19
+#
+# It will store it in snpEff's directory structure. These other two you need to download
+# manually (and you can put them wherever you like)
 # GWAS_CAT
 # DBNSFP
 # ---- VAAST ----
@@ -104,14 +117,18 @@ if	! ([ "$PHASE_START" == "setup" ] || \
 		[ "$PHASE_START" == "align" ] || \
 		[ "$PHASE_START" == "build_bam" ] || \
 		[ "$PHASE_START" == "sort_bam" ] || \
-		[ "$PHASE_START" == "post_process" ] || \
+		[ "$PHASE_START" == "dedup" ] || \
+		[ "$PHASE_START" == "realign" ] || \
+		[ "$PHASE_START" == "recalibrate" ] || \
 		[ "$PHASE_START" == "call" ] || \
 		[ "$PHASE_START" == "filter" ] || \
 		[ "$PHASE_START" == "annotate" ]) || \
 	! ([ "$PHASE_STOP" == "align" ] || \
 		[ "$PHASE_STOP" == "build_bam" ] || \
 		[ "$PHASE_STOP" == "sort_bam" ] || \
-		[ "$PHASE_STOP" == "post_process" ] || \
+		[ "$PHASE_STOP" == "dedup" ] || \
+		[ "$PHASE_STOP" == "realign" ] || \
+		[ "$PHASE_STOP" == "recalibrate" ] || \
 		[ "$PHASE_STOP" == "call" ] || \
 		[ "$PHASE_STOP" == "filter" ] || \
 		[ "$PHASE_STOP" == "annotate" ] || \
@@ -173,7 +190,7 @@ MAX_BYTE_MEM=$(( $MAX_MEM*1024*1024*1024 ))
 MAX_SAMPLE_MEM=$(( $MAX_BYTE_MEM/$NUM_SAMPLES ))
 
 # a java shortcut to use the appropriate amount of memory
-RUN_JAVA="/usr/local/java/jdk1.6.0_22_x64/bin/java -Xmx$MAX_SAMPLE_MEM"
+RUN_JAVA="$JAVA/bin/java -Xmx$MAX_SAMPLE_MEM"
 
 VCF_NAME=""
 if [ -z $1 ]
@@ -183,9 +200,9 @@ else
 	VCF_NAME="haplotypeCaller$1"
 fi
 
+# silently test if we have enough memory... but fail early if we don't
 $RUN_JAVA >/dev/null 2>/dev/null &
 waitForJobs
-# silently test if we have enough memory... but fail early if we don't
 
 #******** Actual jobs start here ********
 
@@ -206,8 +223,10 @@ then
 	then
 		$SAM_DIR/samtools faidx $REF_FASTA &
 	fi
-	# download snpEff database for hg19
-	# this is actually really buggy! it tries to download in the wrong places, and you have to tweak a line in snpEff.config to get it to work... do this by hand!
+	
+	# TODO: download snpEff database for hg19 here instead of making the user do it...
+	# this is actually really buggy! it tries to download in the wrong places, and you
+	# have to tweak a line in snpEff.config to get it to work
 	#if [ `ls snpEff_*_hg19.zip | wc -l` > 0 ]
 	#then
 	#	MYDIR=`pwd`
@@ -237,7 +256,7 @@ then
 	
 	for i in ${SAMPLES[*]}
 	do
-		echo "...aln "$i
+		echo "...bwa aln "$i
 		mkdir $TARGET_DIR/alignment/$i
 		mkdir $TARGET_DIR/alignment/$i/logs
 		
@@ -286,6 +305,7 @@ then
 		read2=(`ls $DATA_DIR/$i/*R2*.gz`)
 		for j in ${read1[*]}
 		do
+			echo "...bwa sampe | samtools view: $i, lane "$(( $counter+1 ))
 			$BWA_DIR/bwa sampe \
 				-r "$readGroup" \
 				$REF_FASTA \
@@ -325,6 +345,7 @@ then
 		BYTES_PER_LANE=$(( $MAX_BYTE_MEM / $NUMLANES ))
 		for ((j=1; j<=$NUMLANES; j++))
 		do
+			echo "...samtools sort: $i, lane $j"
 			$SAM_DIR/samtools sort \
 				$TARGET_DIR/alignment/$i/lane$j.unsorted.bam \
 				$TARGET_DIR/alignment/$i/lane$j \
@@ -334,7 +355,6 @@ then
 		done
 	done
 	
-	echo "...bundle"
 	for i in ${SAMPLES[*]}
 	do
 		NUMLANES=`ls $DATA_DIR/$i/*R1*.gz | wc -l`
@@ -343,6 +363,7 @@ then
 			mv $TARGET_DIR/alignment/$i/lane1.bam $TARGET_DIR/alignment/$i/merged.bam
 			continue
 		fi
+		echo "...samtools merge: $i"
 		ALLLANES=""
 		for ((j=1; j<=$NUMLANES; j++))
 		do
@@ -356,23 +377,23 @@ then
 		waitForJobs
 	done
 	
-	export PHASE_START="post_process"
+	export PHASE_START="dedup"
 fi
 
-if [ "$PHASE_STOP" == "post_process" ]
+if [ "$PHASE_STOP" == "dedup" ]
 then
 	finish
 fi
 
-if [ "$PHASE_START" == "post_process" ]
+if [ "$PHASE_START" == "dedup" ]
 then
-	echo "post_process..."
-	echo "...dedup"
+	echo "dedup..."
 	rm -rf $TARGET_DIR/dedup
 	mkdir $TARGET_DIR/dedup
 	mkdir $TARGET_DIR/dedup/logs
 	for i in ${SAMPLES[*]}
 	do
+		echo "...Picard MarkDuplicates: "$i
 		$RUN_JAVA -jar $PICARD_DIR/MarkDuplicates.jar \
 			INPUT=$TARGET_DIR/alignment/$i/merged.bam \
 			OUTPUT=$TARGET_DIR/dedup/$i.bam \
@@ -384,22 +405,33 @@ then
 	done
 	waitForJobs
 	
-	echo "...index"
 	for i in ${SAMPLES[*]}
 	do
+		echo "...samtools index: "$i
 		$SAM_DIR/samtools index \
 			$TARGET_DIR/dedup/$i.bam \
 			$TARGET_DIR/dedup/$i.bai &
 	done
 	waitForJobs
 	
-	echo "...acquire realignment targets"
+	export PHASE_START="realign"
+fi
+
+if [ "$PHASE_STOP" == "realign" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "realign" ]
+then
+	echo "realign..."
 	rm -rf $TARGET_DIR/realignment
 	mkdir $TARGET_DIR/realignment
 	mkdir $TARGET_DIR/realignment/logs
 	mkdir $TARGET_DIR/realignment/stats
 	for i in ${SAMPLES[*]}
 	do
+		echo "...GATK RealignerTargetCreator: "$i
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T RealignerTargetCreator \
 			-I $TARGET_DIR/dedup/$i.bam \
@@ -412,9 +444,9 @@ then
 	done
 	waitForJobs
 	
-	echo "...realign"
 	for i in ${SAMPLES[*]}
 	do
+		echo "...GATK IndelRealigner: "$i
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T IndelRealigner \
 			-I $TARGET_DIR/dedup/$i.bam \
@@ -427,24 +459,35 @@ then
 			2>$TARGET_DIR/realignment/logs/$i.indelRealigner.err.log &
 	done
 	waitForJobs
-	
-	echo "index..."
+
 	for i in ${SAMPLES[*]}
 	do
+		echo "...samtools index: "$i
 		$SAM_DIR/samtools index \
 			$TARGET_DIR/realignment/$i.bam \
 			$TARGET_DIR/realignment/$i.bai &
 	done
 	waitForJobs
 	
+	export PHASE_START="recalibrate"
+fi
+
+if [ "$PHASE_STOP" == "recalibrate" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "recalibrate" ]
+then
 	rm -rf $TARGET_DIR/recalibration
 	mkdir $TARGET_DIR/recalibration
 	mkdir $TARGET_DIR/recalibration/logs
 	mkdir $TARGET_DIR/recalibration/stats
 	
-	echo "...calculate stats"
+	echo "recalibrate..."
 	for i in ${SAMPLES[*]}
 	do
+		echo "...GATK BaseRecalibrator: "$i
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T BaseRecalibrator \
 			-I $TARGET_DIR/realignment/$i.bam \
@@ -458,9 +501,9 @@ then
 	done
 	waitForJobs
 	
-	echo "...recalibrate"
 	for i in ${SAMPLES[*]}
 	do
+		echo "...GATK PrintReads (update scores): "$i
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T PrintReads \
 			-I $TARGET_DIR/realignment/$i.bam \
@@ -472,9 +515,9 @@ then
 	done
 	waitForJobs
 	
-	echo "...index"
 	for i in ${SAMPLES[*]}
 	do
+		echo "...samtools index: "$i
 		$SAM_DIR/samtools index \
 			$TARGET_DIR/recalibration/$i.bam \
 			$TARGET_DIR/recalibration/$i.bai &
@@ -496,12 +539,12 @@ then
 	mkdir $TARGET_DIR/calls
 	mkdir $TARGET_DIR/calls/logs
 	
-	echo "...merge"
 	TEMP=""
 	for i in ${SAMPLES[*]}
 	do
 		TEMP="$TEMP -I $TARGET_DIR/recalibration/$i.bam"
 	done
+	echo "...GATK PrintReads (merge):"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T PrintReads \
 		$TEMP \
@@ -513,7 +556,7 @@ then
 	
 	if [ -z $MIN_PRUNING ]
 	then
-		echo "...unifiedGenotyper"
+		echo "...GATK UnifiedGenotyper (SNPs)"
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T UnifiedGenotyper \
 			-I $TARGET_DIR/calls/all.bam \
@@ -523,6 +566,7 @@ then
 			--genotype_likelihoods_model SNP \
 			>$TARGET_DIR/calls/logs/snps.$VCF_NAME.raw.log \
 			2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.raw.err.log &
+		echo "...GATK UnifiedGenotyper (INDELs)"
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T UnifiedGenotyper \
 			-I $TARGET_DIR/calls/all.bam \
@@ -534,7 +578,7 @@ then
 			2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.raw.err.log &
 		waitForJobs
 	else
-		echo "...haplotypeCaller --minPruning $MIN_PRUNING"
+		echo "...GATK HaplotypeCaller --minPruning $MIN_PRUNING"
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T HaplotypeCaller \
 			-I $TARGET_DIR/calls/all.bam \
@@ -546,7 +590,7 @@ then
 			2>$TARGET_DIR/calls/logs/$VCF_NAME.err.log &
 		waitForJobs
 		
-		echo "...separating"
+		echo "...GATK SelectVariants (separate SNPs, INDELs)"
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T SelectVariants \
 			--variant $TARGET_DIR/calls/$VCF_NAME.raw.vcf \
@@ -578,12 +622,12 @@ if [ "$PHASE_START" == "filter" ]
 then
 	echo "filter..."
 	
-	echo "...hard"
 	INBREEDING_PARAMETER=""
 	if (( ${#SAMPLES[@]} >= 10 ))
 	then
 		INBREEDING_PARAMETER="--filterExpression \"InbreedingCoeff < -0.8\" --filterName \"InbreedingCoeff Filter\""
 	fi
+	echo "...GATK VariantFiltration (SNPs)"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T VariantFiltration \
 		--variant $TARGET_DIR/calls/snps.$VCF_NAME.raw.vcf \
@@ -603,6 +647,7 @@ then
 		--filterName "ReadPosRankSum Filter" \
 		>$TARGET_DIR/calls/logs/snps.$VCF_NAME.variantFiltration.log \
 		2>$TARGET_DIR/calls/logs/snps.$VCF_NAME.variantFiltration.err.log &
+	echo "...GATK VariantFiltration (INDELs)"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T VariantFiltration \
 		--variant $TARGET_DIR/calls/indels.$VCF_NAME.raw.vcf \
@@ -619,7 +664,7 @@ then
 		2>$TARGET_DIR/calls/logs/indels.$VCF_NAME.variantFiltration.err.log &
 	waitForJobs
 	
-	echo "...recombine"
+	echo "...GATK CombineVariants (recombine SNPs and INDELs)"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T CombineVariants \
 		--variant $TARGET_DIR/calls/snps.$VCF_NAME.filtered.vcf \
@@ -632,7 +677,7 @@ then
 	
 	if [ "$EXOME_OR_GENOME" == "exome" ]
 	then
-		echo "...purge"
+		echo "...GATK SelectVariants (remove off-target variants)"
 		$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 			-T SelectVariants \
 			--variant $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
@@ -646,7 +691,7 @@ then
 		mv $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf
 	fi
 	
-	echo "...pass"
+	echo "...GATK SelectVariants (physically remove variants that didn't PASS)"
 	$RUN_JAVA -jar $GATK_DIR/GenomeAnalysisTK.jar \
 		-T SelectVariants \
 		--variant $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf \
@@ -657,7 +702,7 @@ then
 		2>$TARGET_DIR/calls/logs/pass.$VCF_NAME.selectVariants.err.log &
 	waitForJobs
 	
-	echo "...manual DP Filter"
+	echo "...dpFilter.py (manual, std-dev-based filter that remains in the .vcf)"
 	python ${0%best_practice_v4.sh}dpFilter.py \
 		--stddev 5 \
 		--in $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf \
@@ -680,7 +725,7 @@ then
 	export PHASE_START="annotate"
 fi
 
-# At this point, the .vcf files with caps are ready for analysis elsewhere... FILTER_MODE will decide which one gets annotated
+# At this point, the .vcf files with CAPS in their names are ready for analysis elsewhere... FILTER_MODE will decide which one gets annotated
 VCF_NAME=$FILTER_MODE.$VCF_NAME
 
 if [ "$PHASE_STOP" == "annotate" ]
@@ -797,7 +842,8 @@ then
 	rm -rf $TARGET_DIR/annotation/snpeff
 	mkdir $TARGET_DIR/annotation/snpeff
 	mkdir $TARGET_DIR/annotation/snpeff/logs
-		
+	
+	echo "......normal"
 	$RUN_JAVA -jar $SNPEFF_DIR/snpEff.jar \
 		-c $SNPEFF_DIR/snpEff.config \
 		-s $TARGET_DIR/annotation/snpeff/$VCF_NAME.summary.html \
@@ -807,6 +853,7 @@ then
 		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.predbnsfp.err.log &
 	waitForJobs
 	
+	echo "......dbnsfp"
 	$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
 		dbnsfp \
 		-a \
@@ -816,6 +863,7 @@ then
 		2>$TARGET_DIR/annotation/snpeff/logs/$VCF_NAME.pregwascat.err.log &
 	waitForJobs
 	
+	echo "......gwasCat"
 	$RUN_JAVA -jar $SNPEFF_DIR/SnpSift.jar \
 		gwasCat \
 		$GWAS_CAT \
@@ -825,4 +873,4 @@ then
 	waitForJobs
 fi
 
-echo "done"
+echo "Done"

@@ -2,7 +2,7 @@
 # PHASE_START		"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
 #					Phase to begin with - most of the time it will be align unless you've added a new reference genome
 #					you're restarting after a crash
-export PHASE="sort_bam"
+export PHASE_START="sort_bam"
 # PHASE_STOP		"align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate", ""
 #					Phase before which to end... "" will run the whole pipeline. Useful for debugging
 export PHASE_STOP="post_process"

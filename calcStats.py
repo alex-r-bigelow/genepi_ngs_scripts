@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import argparse, sys
+import argparse, sys, os, gzip
 from genome_utils import kgpInterface, countingDict, parsePopulations
 
 class allStats:
@@ -88,18 +88,28 @@ class allStats:
 def tick():
     print ".",
 
-def run(args, tickFunction=tick):
-    takenTags = set()
-    headerline = ""
-    
-    if args.popFile != "":
-        myPopulations = parsePopulations(args.popFile)[0]
+def parseVcfHeader(path, outpath=None, popFile=""):
+    if popFile != "":
+        populations = parsePopulations(args.popFile)[0]
     else:
-        myPopulations = {"Samples":[]}
-    myPopulationIndices = {}
+        popName = os.path.split(path)[1]
+        populations = {popName:[]}
+    populationIndices = {}
     
-    infile = open(args.infile,'r')
-    outfile = open(args.outfile,'w')
+    infoTags = set()
+    
+    if path.endswith('.gz'):
+        infile = gzip.open(path,'rb')
+    else:
+        infile = open(path,'rb')
+    
+    outfile = None
+    if outpath != None:
+        if outpath.endswith('.gz'):
+            outfile = gzip.open(outpath,'wb')
+        else:
+            outfile = open(outpath, 'wb')
+    
     for line in infile:
         if len(line) <= 1:
             continue
@@ -107,21 +117,29 @@ def run(args, tickFunction=tick):
             if line.startswith("##INFO"):
                 newTag = line[line.find("ID=")+3:]
                 newTag = newTag[:newTag.find(',')]
-                takenTags.add(newTag)
-            outfile.write(line)
+                infoTags.add(newTag)
+            if outpath != None:
+                outfile.write(line)
         elif line.startswith("#"):
             headerline = line
             columns = line.strip().split('\t')
-            if args.popFile == "":
-                myPopulations["Samples"] = columns[9:]
-            for p,individuals in myPopulations.iteritems():
-                myPopulationIndices[p] = []
+            if popFile == "":
+                populations[popName] = columns[9:]
+            for p,individuals in populations.iteritems():
+                populationIndices[p] = []
                 for i in individuals:
-                    myPopulationIndices[p].append(columns.index(i)-9)
-            break
+                    populationIndices[p].append(columns.index(i)-9)
+            infile.close()
+            if outfile != None:
+                return (outfile,infoTags,headerline,populations,populationIndices)
+            return (infoTags,headerline,populations,populationIndices)
         else:
             raise Exception("Missing a header line or something else is wrong...")
     infile.close()
+    
+
+def run(args, tickFunction=tick):
+    outfile,takenTags,headerline,myPopulations,myPopulationIndices = parseVcfHeader(args.infile,args.outfile,args.popFile)
     
     statsToCalculate = {}   # {INFO tag : (allStats.statistic,population)}
     
@@ -232,7 +250,6 @@ def run(args, tickFunction=tick):
         
         outfile.write(str(line))
     
-    infile.close()
     outfile.close()
 
 if __name__ == '__main__':
@@ -245,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--data', type=str, dest="data",
                         help='Path to directory containing 1000 genomes .vcf.gz files 1-22,X,Y.')
     parser.add_argument('--populations', type=str, dest="popFile", nargs="?", const="", default="",
-                        help='Tab-delimited .txt file containing populations in your .vcf file. A header is required, (each header is the population name), and each row under the header is a sample ID from the .vcf file indicating that that sample is a member of that population. If not supplied, all samples will be used and the population will be labeled "Samples". '+
+                        help='Tab-delimited .txt file containing populations in your .vcf file. A header is required, (each header is the population name), and each row under the header is a sample ID from the .vcf file indicating that that sample is a member of that population. If not supplied, all samples will be used and the population name will be the file name (e.g. "myFile.vcf"). '+
                         'See KGP_populations.txt for an example of how to format this file. Be careful to not reuse any of the column headers in KGP_populations.txt for your own data.')
     parser.add_argument('--reorder_alleles', type=str, dest="reorder_alleles", nargs="?", const="ALL_KGP", default="ALL_KGP",
                         help='The REF/ALT configuration from the sequencing pipeline is not necessarily the major/minor allele. Use '+

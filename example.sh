@@ -1,10 +1,10 @@
 #!/bin/bash
-# PHASE_START		"setup", "align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate"
+# PHASE_START		"setup", "align", "build_bam", "sort_bam", "dedup", "realign", "recalibrate", "call", "filter", "annotate"
 #					Phase to begin with - most of the time it will be align unless you've added a new reference genome
 #					you're restarting after a crash
-export PHASE="align"
-# PHASE_STOP		"align", "build_bam", "sort_bam", "post_process", "call", "filter", "annotate", ""
-#					Phase before which to end... "" will run the whole pipeline. Useful for debugging
+export PHASE_START="align"
+# PHASE_STOP		"align", "build_bam", "sort_bam", "dedup", "realign", "recalibrate", "call", "filter", "annotate", ""
+#					Phase before which to end; "" will run the whole pipeline. This option is useful for debugging
 export PHASE_STOP=""
 
 # DATA_DIR			Directory. Should contain directories for each sample (named appropriately - these

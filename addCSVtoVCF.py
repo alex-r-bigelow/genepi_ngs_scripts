@@ -1,13 +1,16 @@
 #!/usr/bin/env python
-import argparse, csv
+import argparse, csv, gzip
 from genome_utils import vcfLine, genomeException, standardizeChromosome
 
 def sniffCsv(path):
-    # first peek at the first 20 lines or so
+    # first peek at the first 10 lines or so
     bloodhound = csv.Sniffer()
-    snifflines = 20
+    snifflines = 10
     text = []
-    csvfile = open(path,'rb')
+    if path.endswith('.gz'):
+        csvfile = gzip.open(path)
+    else:
+        csvfile = open(path,'rb')
     for x in xrange(snifflines):
         text.append(csvfile.readline())
         if text[x] == '':

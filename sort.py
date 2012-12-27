@@ -3,8 +3,13 @@ import argparse, gzip, os, tempfile
 from durus.file_storage import FileStorage
 from durus.connection import Connection
 from genome_utils import chromosomeOrder, standardizeChromosome, vcfLine
+from blistPersistent.sorteddictPersistent import sorteddict
+from addCSVtoVCF import sniffCsv
 
-def sortVcf(inpath,outpath,compress):
+def sortVcf(inpath,outpath,compress,tickFunction=None,numTicks=1000):
+    tickInterval = 2*os.path.getsize(inpath)/numTicks
+    nextTick = 0
+    
     if compress:
         infile = gzip.open(inpath,'rb')
         outfile = gzip.open(outpath,'wb')
@@ -49,13 +54,67 @@ def sortVcf(inpath,outpath,compress):
             line = vcfLine(line.strip().split('\t'))
             line.extractChrAndPos()
             if not data.has_key(line.chromosome):
-                data[line.chromosome]
+                data[line.chromosome] = sorteddict()
+            data[line.chromosome][line.position] = line
+            if infile.tell() > nextTick:
+                dataConnection.commit()
+                nextTick += tickInterval
+                if tickFunction != None:
+                    tickFunction()
     infile.close()
+    dataConnection.commit()
+    
+    tickInterval = 0
+    currentTick = 0
+    nextTick = 0
+    for lines in data.itervalues():
+        tickInterval += len(lines)
+    tickInterval = 2*tickInterval/numTicks
+    
+    for chrom in chromosomeOrder:
+        if data.has_key(chrom):
+            for line in data[chrom]:
+                outfile.write(str(line))
+                currentTick += 1
+                if currentTick > nextTick:
+                    nextTick += tickInterval
+                    if tickFunction != None:
+                        tickFunction()
+    for chrom in extraChromosomes:
+        if data.has_key(chrom):
+            for line in data[chrom]:
+                outfile.write(str(line))
+                currentTick += 1
+                if currentTick > nextTick:
+                    nextTick += tickInterval
+                    if tickFunction != None:
+                        tickFunction()
+    outfile.close()
 
-def sortCsv(inpath,outpath,compress):
-    pass
+def sortCsv(inpath,outpath,compress,tickFunction=None,numTicks=1000):
+    tickInterval = 2*os.path.getsize(inpath)/numTicks
+    nextTick = 0
+    
+    #
+    
+    if compress:
+        infile = gzip.open(inpath,'rb')
+        outfile = gzip.open(outpath,'wb')
+    else:
+        infile = open(inpath,'rb')
+        outfile = open(outpath,'wb')
+    
+    tempFile = tempfile.NamedTemporaryFile()
+    tempPath = tempFile.name
+    tempFile.close()
+    
+    dataConnection = Connection(FileStorage(tempPath))
+    data = dataConnection.get_root()
+    extraChromosomes = []
+    
+    
 
-def sortBed(inpath,outpath,compress):
+def sortBed(inpath,outpath,compress,tickFunction=None,numTicks=1000):
     pass
 
 def run(args):
