@@ -65,7 +65,7 @@ export SAM_DIR=/raid1/sequencing/apps/post_processing/samtools-0.1.18
 export PICARD_DIR=/raid1/sequencing/apps/post_processing/picard-tools-1.78
 
 # GATK_DIR
-export GATK_DIR=/raid1/sequencing/apps/post_processing/GenomeAnalysisTK-2.1-11-g13c0244
+export GATK_DIR=/raid1/sequencing/apps/post_processing/GenomeAnalysisTK-2.3-4-g57ea19f
 
 # SNPEFF_DIR
 export SNPEFF_DIR=/raid1/sequencing/apps/annotation/snpEff_3_1
@@ -101,22 +101,22 @@ export VAAST_FASTA=$REF_DIR/human_g1k_v37.vaast.fasta
 
 # --- GATK bundle ---
 # REF_DBSNP_129
-REF_DBSNP_129=$REF_DIR/dbsnp_135.b37.excluding_sites_after_129.vcf
+export REF_DBSNP_129=$REF_DIR/dbsnp_135.b37.excluding_sites_after_129.vcf
 
 # REF_DBSNP
-REF_DBSNP=$REF_DIR/dbsnp_135.b37.vcf
+export REF_DBSNP=$REF_DIR/dbsnp_135.b37.vcf
 
 # REF_MILLS
-REF_MILLS=$REF_DIR/Mills_and_1000G_gold_standard.indels.b37.sites.vcf
+export REF_MILLS=$REF_DIR/Mills_and_1000G_gold_standard.indels.b37.sites.vcf
 
 # REF_KGP
-REF_KGP=$REF_DIR/1000G_phase1.indels.b37.vcf
+export REF_KGP=$REF_DIR/1000G_phase1.indels.b37.vcf
 
 # REF_HAPMAP
-REF_HAPMAP=$REF_DIR/hapmap_3.3.b37.vcf
+export REF_HAPMAP=$REF_DIR/hapmap_3.3.b37.vcf
 
 # REF_OMNI
-REF_OMNI=$REF_DIR/1000G_omni2.5.b37.sites.vcf
+export REF_OMNI=$REF_DIR/1000G_omni2.5.b37.sites.vcf
 
 # (EXOME_TARGETS - see above)
 export EXOME_TARGETS=$DATA_DIR/SeqCap_EZ_Exome_v3_b37_capture+300.bed

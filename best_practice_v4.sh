@@ -493,9 +493,9 @@ then
 			-I $TARGET_DIR/realignment/$i.bam \
 			-o $TARGET_DIR/recalibration/stats/$i.grp \
 			-R $REF_FASTA \
-			--knownSites $REF_MILLS \
-			--knownSites $REF_KGP \
-			--knownSites $REF_DBSNP \
+			-knownSites $REF_MILLS \
+			-knownSites $REF_KGP \
+			-knownSites $REF_DBSNP \
 			>$TARGET_DIR/recalibration/logs/$i.baseRecalibrator.log \
 			2>$TARGET_DIR/recalibration/logs/$i.baseRecalibrator.err.log &
 	done
