@@ -882,6 +882,7 @@ class gui:
         self.window.reject()
     
     def run(self):
+        # sort all input files
         # TODO: sort all the files, reorder alleles
         self.window.accept()
 

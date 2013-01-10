@@ -3,9 +3,9 @@ import argparse, csv, gzip
 from genome_utils import vcfLine, genomeException, standardizeChromosome
 
 def sniffCsv(path):
-    # first peek at the first 10 lines or so
+    # first peek at the first 20 lines or so
     bloodhound = csv.Sniffer()
-    snifflines = 10
+    snifflines = 20
     text = []
     if path.endswith('.gz'):
         csvfile = gzip.open(path)
@@ -14,7 +14,9 @@ def sniffCsv(path):
     for x in xrange(snifflines):
         text.append(csvfile.readline())
         if text[x] == '':
-            raise Exception('Less than %i lines in .csv file' % snifflines)
+            if x == 0:
+                raise Exception('Error parsing header from .csv file!')
+            break
     
     scent = bloodhound.sniff("".join(text))
     

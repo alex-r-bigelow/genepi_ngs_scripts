@@ -1,144 +1,164 @@
 #!/usr/bin/env python
-import argparse, gzip, os, tempfile
-from durus.file_storage import FileStorage
-from durus.connection import Connection
-from genome_utils import chromosomeOrder, standardizeChromosome, vcfLine
-from blistPersistent.sorteddictPersistent import sorteddict
+import argparse, os
+from genome_utils import standardizeChromosome, vcfLine, bedLine, chromosomeRank
 from addCSVtoVCF import sniffCsv
+from recipe576755 import batch_sort
 
-def sortVcf(inpath,outpath,compress,tickFunction=None,numTicks=1000):
-    tickInterval = 2*os.path.getsize(inpath)/numTicks
-    nextTick = 0
+count = 0
+def tick():
+    global count
+    print "Sorting: {0}%\r".format(count),
+    count += 1
+    return True
+
+class vcfKey:
+    FIRSTLINE = 0
+    CONTIG = 1
+    OTHER_META = 2
+    HEADER = 3
+    REGULAR = 4
+    EMPTY = 5
     
-    if compress:
-        infile = gzip.open(inpath,'rb')
-        outfile = gzip.open(outpath,'wb')
-    else:
-        infile = open(inpath,'rb')
-        outfile = open(outpath,'wb')
-    
-    tempFile = tempfile.NamedTemporaryFile()
-    tempPath = tempFile.name
-    tempFile.close()
-    
-    dataConnection = Connection(FileStorage(tempPath))
-    data = dataConnection.get_root()
-    extraChromosomes = []
-    
-    contigs = {None:[]}
-    
-    for line in infile:
-        if line.startswith('##'):
-            if 'contig' in line:
+    def __init__(self, line):
+        if len(line.strip()) == 0:
+            self.type = vcfKey.EMPTY
+        elif line.startswith('##'):
+            line = line.lower()
+            if line.startswith('##fileformat'):
+                self.type = vcfKey.FIRSTLINE
+            elif line.startswith('##contig'):
+                self.type = vcfKey.CONTIG
                 contigID = line[line.find('ID=')+3:]
-                before = line[:line.find('ID=')+3]
-                after = contigID[contigID.find(','):]
                 contigID = contigID[:contigID.find(',')]
-                
-                contigID = standardizeChromosome(contigID)
-                
-                if contigID in chromosomeOrder:
-                    contigs[contigID] = before + contigID + after
-                else:
-                    contigs[None].append((contigID,before + contigID + after))
+                self.chromosome = standardizeChromosome(contigID)
             else:
-                outfile.write(line)
+                self.type = vcfKey.OTHER_META
+                self.line = line
         elif line.startswith('#'):
-            for c in chromosomeOrder:
-                if contigs.has_key(c):
-                    outfile.write(contigs[c])
-            for c in sorted(contigs[None]):
-                outfile.write(c[1])
-            outfile.write(line)
+            self.type = vcfKey.HEADER
         else:
-            line = vcfLine(line.strip().split('\t'))
-            line.extractChrAndPos()
-            if not data.has_key(line.chromosome):
-                data[line.chromosome] = sorteddict()
-            data[line.chromosome][line.position] = line
-            if infile.tell() > nextTick:
-                dataConnection.commit()
-                nextTick += tickInterval
-                if tickFunction != None:
-                    tickFunction()
-    infile.close()
-    dataConnection.commit()
-    
-    tickInterval = 0
-    currentTick = 0
-    nextTick = 0
-    for lines in data.itervalues():
-        tickInterval += len(lines)
-    tickInterval = 2*tickInterval/numTicks
-    
-    for chrom in chromosomeOrder:
-        if data.has_key(chrom):
-            for line in data[chrom]:
-                outfile.write(str(line))
-                currentTick += 1
-                if currentTick > nextTick:
-                    nextTick += tickInterval
-                    if tickFunction != None:
-                        tickFunction()
-    for chrom in extraChromosomes:
-        if data.has_key(chrom):
-            for line in data[chrom]:
-                outfile.write(str(line))
-                currentTick += 1
-                if currentTick > nextTick:
-                    nextTick += tickInterval
-                    if tickFunction != None:
-                        tickFunction()
-    outfile.close()
+            self.type = vcfKey.REGULAR
+            temp = vcfLine(line.strip().split('\t'))
+            temp.extractChrAndPos()
+            self.chromosome = temp.chromosome
+            self.position = temp.position
+    def __cmp__(self, other):
+        if self.type != other.type:
+            return self.type-other.type
+        else:
+            if self.type == vcfKey.REGULAR:
+                if self.chromosome == other.chromosome:
+                    return self.position-other.position
+                else:
+                    myRank = chromosomeRank.get(self.chromosome,len(chromosomeRank))
+                    otherRank = chromosomeRank.get(other.chromosome,len(chromosomeRank))
+                    result = myRank-otherRank
+                    if result == 0:
+                        # we already know they're not the same chromosome; our behavior is to sort unknown chromosomes alphabetically
+                        return cmp(self.chromosome,other.chromosome)
+                    else:
+                        return result
+            elif self.type == vcfKey.CONTIG:
+                myRank = chromosomeRank.get(self.chromosome,len(chromosomeRank))
+                otherRank = chromosomeRank.get(other.chromosome,len(chromosomeRank))
+                result = myRank-otherRank
+                if result == 0:
+                    # we already know they're not the same chromosome; our behavior is to sort unknown chromosomes alphabetically
+                    return cmp(self.chromosome,other.chromosome)
+                else:
+                    return result
+            elif self.type == vcfKey.OTHER_META:
+                # I could probably do a better job of this, but the .vcf spec doesn't require it so I don't care
+                return cmp(self.line,other.line)
+            elif self.type == vcfKey.EMPTY:
+                return 0
+            else:
+                raise Exception("Duplicate ##fileformat or header lines!")
 
-def sortCsv(inpath,outpath,compress,tickFunction=None,numTicks=1000):
-    tickInterval = 2*os.path.getsize(inpath)/numTicks
-    nextTick = 0
+class csvKey:
+    firstLineSeen = False
+    delimiter = None
+    chromColumn = None
+    posColumn = None
     
-    #
+    def __init__(self, line):
+        if not csvKey.firstLineSeen:
+            csvKey.firstLineSeen = True
+            self.isFirstLine = True
+            self.line = line
+        else:
+            self.isFirstLine = False
+            columns = line.strip().split(csvKey.delimiter)
+            self.chromosome = standardizeChromosome(columns[csvKey.chromColumn])
+            self.position = int(columns[csvKey.posColumn])
     
-    if compress:
-        infile = gzip.open(inpath,'rb')
-        outfile = gzip.open(outpath,'wb')
-    else:
-        infile = open(inpath,'rb')
-        outfile = open(outpath,'wb')
-    
-    tempFile = tempfile.NamedTemporaryFile()
-    tempPath = tempFile.name
-    tempFile.close()
-    
-    dataConnection = Connection(FileStorage(tempPath))
-    data = dataConnection.get_root()
-    extraChromosomes = []
-    
-    
+    def __cmp__(self, other):
+        if self.isFirstLine:
+            return -1
+        elif other.isFirstLine:
+            return 1
+        elif self.chromosome == other.chromosome:
+            return self.position-other.position
+        else:
+            myRank = chromosomeRank.get(self.chromosome,len(chromosomeRank))
+            otherRank = chromosomeRank.get(other.chromosome,len(chromosomeRank))
+            result = myRank-otherRank
+            if result == 0:
+                # we already know they're not the same chromosome; our behavior is to sort unknown chromosomes alphabetically
+                return cmp(self.chromosome,other.chromosome)
+            else:
+                return result
 
-def sortBed(inpath,outpath,compress,tickFunction=None,numTicks=1000):
-    pass
+class bedKey:
+    def __init__(self, line):
+        temp = bedLine(line)
+        self.chromosome = temp.chromosome
+        self.start = temp.start
+    
+    def __cmp__(self, other):
+        if self.chromosome == other.chromosome:
+            return self.start - other.start
+        else:
+            myRank = chromosomeRank.get(self.chromosome,len(chromosomeRank))
+            otherRank = chromosomeRank.get(other.chromosome,len(chromosomeRank))
+            result = myRank-otherRank
+            if result == 0:
+                # we already know they're not the same chromosome; our behavior is to sort unknown chromosomes alphabetically
+                return cmp(self.chromosome,other.chromosome)
+            else:
+                return result
 
-def run(args):
-    temp = os.path.splitext(args.infile)
+def sortVcf(inpath, outpath, tickFunction=tick, numTicks=100):
+    batch_sort(inpath, outpath, key=vcfKey, tickFunction=tickFunction, numTicks=numTicks)
+
+def sortCsv(inpath, outpath, tickFunction=tick, numTicks=100):
+    csvKey.delimiter,headers,csvKey.chromColumn,csvKey.posColumn,idColumn = sniffCsv(inpath)
+    batch_sort(inpath, outpath, key=csvKey, tickFunction=tickFunction, numTicks=numTicks)
+
+def sortBed(inpath, outpath, tickFunction=tick, numTicks=100):
+    batch_sort(inpath, outpath, key=bedKey, tickFunction=tickFunction, numTicks=numTicks)
+
+def run(args, tickFunction=tick, numTicks=100):
+    inpath = args.infile
+    outpath = args.outfile
+    
+    temp = os.path.splitext(inpath)
     f = temp[1].lower()
-    compress = False
-    if f == ".gz":
-        compress = True
-        f = os.path.splitext(temp[0])[1].lower()
     if f == ".vcf":
-        sortVcf(args.infile,args.outfile,compress)
+        sortVcf(inpath,outpath,tickFunction,numTicks)
     elif f == ".csv":
-        sortCsv(args.infile,args.outfile,compress)
+        sortCsv(inpath,outpath,tickFunction,numTicks)
     elif f == ".bed":
-        sortBed(args.infile,args.outfile,compress)
+        sortBed(inpath,outpath,tickFunction,numTicks)
     else:
         raise Exception("Unknown format: %s" % f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sorts a .vcf, .csv, or .bed file first by chromosome: 1-22,X,Y,M, then by position (other chromosomes such as chrUn will be sorted alphabetically and placed last). If .csv, it should have \"CHROM\" and \"POS\" columns')
-    parser.add_argument('--in', type=str, dest="infile",
-                        help='Path to file (format automatically determined from extension). .gz compressed files are allowed, but your output will also be compressed')
-    parser.add_argument('--out', type=str, dest="outfile",
-                        help='Path to file (output should be the same format as input). .gz compressed files are allowed, but your output will also be compressed')
+    parser.add_argument('--in', type=str, dest="infile", required=True,
+                        help='Path to file (format automatically determined from extension)')
+    parser.add_argument('--out', type=str, dest="outfile", required=True,
+                        help='Path to file (output should be the same format as input)')
     
     args = parser.parse_args()
     run(args)
