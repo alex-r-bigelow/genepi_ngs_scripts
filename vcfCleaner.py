@@ -2,7 +2,7 @@
 import sys, os, webbrowser
 from PySide.QtCore import Qt, QFile
 from PySide.QtUiTools import QUiLoader
-from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem, QTreeWidgetItem, QPushButton
+from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem, QTreeWidgetItem, QPushButton, QColor, QPalette
 from genome_utils import genomeException, parsePopulations, MAX_INFO_STRINGS
 from cleanVCF import extractInfoFields
 from addCSVtoVCF import sniffCsv
@@ -192,13 +192,22 @@ class gui:
         self.calculatedAttributes = [] # really just contains strings
         
         # set up GUI - Data Sources Tab
+        self.defaultPalette = self.window.vcfPathField.palette()
+        self.errorPalette = self.window.vcfPathField.palette()
+        self.errorPalette.setColor(QPalette.Base, QColor.fromRgb(255,150,150))
+        
         self.window.browseVcfButton.clicked.connect(self.browseVcf)
+        self.window.vcfPathField.editingFinished.connect(self.globalEnable)
         self.window.browseKgpButton.clicked.connect(self.browseKGP)
+        self.window.kgpPathField.editingFinished.connect(self.updatePopAndGlobalEnable)
         self.window.browseOutputButton.clicked.connect(self.browseOutput)
+        self.window.outputPathField.editingFinished.connect(self.globalEnable)
         self.window.browseLogButton.clicked.connect(self.browseLog)
+        self.window.logPathField.editingFinished.connect(self.globalEnable)
         self.window.browseErrorButton.clicked.connect(self.browseError)
+        self.window.errorPathField.editingFinished.connect(self.globalEnable)
         self.window.browseNonBiallelicButton.clicked.connect(self.browseNonBiallelic)
-        self.window.compressOutputCheckbox.stateChanged.connect(self.compressOutput)
+        self.window.nonBiallelicField.editingFinished.connect(self.globalEnable)
         
         self.window.createPopulationButton.clicked.connect(self.createPopulation)
         self.window.removePopOrSampleButton.clicked.connect(self.removePopOrSample)
@@ -290,6 +299,10 @@ class gui:
         
         self.updatePopLists()
     
+    def updatePopAndGlobalEnable(self):
+        self.updatePopLists()
+        self.globalEnable()
+    
     def updatePopLists(self):
         popOrder = sorted(self.populations.iterkeys())
         includeKGP = os.path.isdir(self.window.kgpPathField.text())
@@ -332,14 +345,87 @@ class gui:
                     child.setText(0,s.globalName)
     
     def globalEnable(self):
-        if os.path.exists(self.window.vcfPathField.text()) and self.window.outputPathField.text() != "":
+        allPathsValid = True
+        
+        inputString = self.window.vcfPathField.text()
+        if os.path.exists(inputString):
             self.window.tabWidget.widget(1).setEnabled(True)
             self.window.tabWidget.widget(2).setEnabled(True)
-            self.window.runButton.setEnabled(True)
+            self.window.vcfPathField.setPalette(self.defaultPalette)
         else:
+            allPathsValid = False
             self.window.tabWidget.widget(1).setEnabled(False)
             self.window.tabWidget.widget(2).setEnabled(False)
             self.window.runButton.setEnabled(False)
+            
+            if inputString != "":
+                self.window.vcfPathField.setPalette(self.errorPalette)
+            else:
+                self.window.vcfPathField.setPalette(self.defaultPalette)
+            
+        outputString = self.window.outputPathField.text()
+        hasOutput = False
+        self.window.outputPathField.setPalette(self.defaultPalette)
+        if outputString != "":
+            if not os.path.exists(os.path.dirname(outputString)):
+                allPathsValid = False
+                self.window.outputPathField.setPalette(self.errorPalette)
+            else:
+                hasOutput = True
+        
+        logString = self.window.logPathField.text()
+        hasLog = False
+        self.window.logPathField.setPalette(self.defaultPalette)
+        if logString != "":
+            if not os.path.exists(os.path.dirname(logString)):
+                allPathsValid = False
+                self.window.logPathField.setPalette(self.errorPalette)
+            else:
+                hasLog = True
+        
+        if hasOutput:
+            if hasLog:
+                self.window.runButton.setText("Save Log and Run")
+            else:
+                self.window.runButton.setText("Run")
+        else:
+            if hasLog:
+                self.window.runButton.setText("Save Log")
+            else:
+                self.window.runButton.setText("Run")
+        
+        kgpString = self.window.kgpPathField.text()
+        self.window.kgpPathField.setPalette(self.defaultPalette)
+        if kgpString != "":
+            if not os.path.exists(kgpString):
+                allPathsValid = False
+                self.window.kgpPathField.setPalette(self.errorPalette)
+        
+        errorString = self.window.errorPathField.text()
+        self.window.errorPathField.setPalette(self.defaultPalette)
+        if hasOutput:
+            self.window.saveErrorWidget.setEnabled(True)
+            if errorString != "":
+                if not os.path.exists(os.path.dirname(errorString)):
+                    allPathsValid = False
+                    self.window.errorPathField.setPalette(self.errorPalette)
+        else:
+            self.window.saveErrorWidget.setEnabled(False)
+            self.window.errorPathField.setText("")
+        
+        nonBiallelicString = self.window.nonBiallelicField.text()
+        self.window.nonBiallelicField.setPalette(self.defaultPalette)
+        if hasOutput:
+            self.window.saveNonBiallelicWidget.setEnabled(True)
+            if nonBiallelicString != "":
+                if not os.path.exists(os.path.dirname(nonBiallelicString)):
+                    allPathsValid = False
+                    self.window.nonBiallelicField.setPalette(self.errorPalette)
+        else:
+            self.window.saveNonBiallelicWidget.setEnabled(False)
+            self.window.nonBiallelicField.setText("")
+        
+        self.window.runButton.setEnabled(allPathsValid and (hasLog or hasOutput))
     
     def updateAttrLists(self):
         self.window.filterList.clear()
@@ -454,7 +540,7 @@ class gui:
     
     # ***** GUI Bindings *****
     def browseVcf(self):
-        fileName = QFileDialog.getOpenFileName(caption=u"Open .vcf file", filter=u"Variant Call Files (*.vcf);;Gzip-compressed VCF (*.vcf.gz)")[0]
+        fileName = QFileDialog.getOpenFileName(caption=u"Open .vcf file", filter=u"Variant Call Files (*.vcf)")[0]
         if fileName == '':
             return
         
@@ -551,10 +637,7 @@ class gui:
             self.window.removeAttrLabel.setText("Remove these columns:")
         elif e == '.cvf':
             self.window.removeAttrLabel.setText("Flag these columns as IGNORE:")
-        
-        if self.window.compressOutputCheckbox.isChecked():
-            fileName += ".gz"
-        
+                
         if fileName == self.window.errorPathField.text() or fileName == self.window.nonBiallelicField.text() or fileName == self.window.vcfPathField.text():
             m = QMessageBox()
             m.setText("You are already using that file name; please choose another.")
@@ -573,22 +656,17 @@ class gui:
         self.window.logPathField.setText(fileName)
     def browseError(self):
         e = self.window.outputPathField.text().lower()
-        if not self.window.compressOutputCheckbox.isChecked():
-            e += ".gz"
-        if e.endswith('.vcf.gz'):
+        if e.endswith('.vcf'):
             f = u"Variant Call File (*.vcf)"
-        elif e.endswith('.csv.gz'):
+        elif e.endswith('.csv'):
             f = u"Tabular File (*.csv)"
-        elif e.endswith('.cvf.gz'):
+        elif e.endswith('.cvf'):
             f = u"CompreheNGSive Variant File (*.cvf)"
         
         fileName = QFileDialog.getSaveFileName(caption=u"Save file", filter=f)[0]
         if fileName == '':
             return
-        
-        if self.window.compressOutputCheckbox.isChecked():
-            fileName += ".gz"
-        
+                
         if fileName == self.window.outputPathField.text() or fileName == self.window.nonBiallelicField.text() or fileName == self.window.vcfPathField.text():
             m = QMessageBox()
             m.setText("You are already using that file name; please choose another.")
@@ -600,22 +678,17 @@ class gui:
         self.globalEnable()
     def browseNonBiallelic(self):
         e = self.window.outputPathField.text().lower()
-        if not self.window.compressOutputCheckbox.isChecked():
-            e += ".gz"
-        if e.endswith('.vcf.gz'):
+        if e.endswith('.vcf'):
             f = u"Variant Call File (*.vcf)"
-        elif e.endswith('.csv.gz'):
+        elif e.endswith('.csv'):
             f = u"Tabular File (*.csv)"
-        elif e.endswith('.cvf.gz'):
+        elif e.endswith('.cvf'):
             f = u"CompreheNGSive Variant File (*.cvf)"
         
         fileName = QFileDialog.getSaveFileName(caption=u"Save file", filter=f)[0]
         if fileName == '':
             return
-        
-        if self.window.compressOutputCheckbox.isChecked():
-            fileName += ".gz"
-        
+                
         if fileName == self.window.outputPathField.text() or fileName == self.window.errorPathField.text() or fileName == self.window.vcfPathField.text():
             m = QMessageBox()
             m.setText("You are already using that file name; please choose another.")
@@ -625,13 +698,6 @@ class gui:
         
         self.window.nonBiallelicField.setText(fileName)
         self.globalEnable()
-    def compressOutput(self):
-        for f in [self.window.outputPathField,self.window.errorPathField,self.window.nonBiallelicField]:
-            if f.text() != "":
-                if self.window.compressOutputCheckbox.isChecked():
-                    f.setText(f.text() + ".gz")
-                else:
-                    f.setText(f.text()[:-3])
     def createPopulation(self):
         newPop = population("Population",self,source=False)
         appendDigit = 2

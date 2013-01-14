@@ -81,7 +81,7 @@
           <item>
            <widget class="QLineEdit" name="vcfPathField">
             <property name="readOnly">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
            </widget>
           </item>
@@ -95,7 +95,7 @@
          </layout>
         </widget>
        </item>
-       <item row="4" column="0">
+       <item row="6" column="0">
         <widget class="QWidget" name="widget" native="true">
          <layout class="QHBoxLayout" name="horizontalLayout_16">
           <property name="margin">
@@ -111,7 +111,7 @@
           <item>
            <widget class="QLineEdit" name="outputPathField">
             <property name="readOnly">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
            </widget>
           </item>
@@ -125,7 +125,7 @@
          </layout>
         </widget>
        </item>
-       <item row="0" column="1" rowspan="14">
+       <item row="0" column="1" rowspan="16">
         <widget class="QTreeWidget" name="treeWidget">
          <property name="selectionMode">
           <enum>QAbstractItemView::MultiSelection</enum>
@@ -172,7 +172,7 @@
          </column>
         </widget>
        </item>
-       <item row="8" column="0" rowspan="7">
+       <item row="9" column="0" rowspan="8">
         <spacer name="verticalSpacer">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -185,7 +185,7 @@
          </property>
         </spacer>
        </item>
-       <item row="14" column="1">
+       <item row="16" column="1">
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <property name="topMargin">
           <number>0</number>
@@ -226,39 +226,6 @@
          </property>
         </widget>
        </item>
-       <item row="7" column="0">
-        <widget class="QWidget" name="saveNonBiallelicWidget" native="true">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <layout class="QHBoxLayout" name="horizontalLayout_19">
-          <property name="margin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="label_10">
-            <property name="text">
-             <string>Separate file for non-biallelic variants:</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="nonBiallelicField">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="browseNonBiallelicButton">
-            <property name="text">
-             <string>Browse...</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
        <item row="2" column="0">
         <widget class="QWidget" name="widget" native="true">
          <property name="toolTip">
@@ -281,7 +248,7 @@
              <string/>
             </property>
             <property name="readOnly">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
            </widget>
           </item>
@@ -302,7 +269,7 @@
          </property>
         </widget>
        </item>
-       <item row="5" column="0">
+       <item row="4" column="0">
         <widget class="QWidget" name="widget_4" native="true">
          <layout class="QHBoxLayout" name="horizontalLayout_21">
           <property name="margin">
@@ -318,7 +285,7 @@
           <item>
            <widget class="QLineEdit" name="logPathField">
             <property name="readOnly">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
            </widget>
           </item>
@@ -332,7 +299,14 @@
          </layout>
         </widget>
        </item>
-       <item row="6" column="0">
+       <item row="5" column="0">
+        <widget class="Line" name="line_4">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item row="7" column="0">
         <widget class="QWidget" name="saveErrorWidget" native="true">
          <property name="enabled">
           <bool>false</bool>
@@ -351,12 +325,45 @@
           <item>
            <widget class="QLineEdit" name="errorPathField">
             <property name="readOnly">
-             <bool>true</bool>
+             <bool>false</bool>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="browseErrorButton">
+            <property name="text">
+             <string>Browse...</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="8" column="0">
+        <widget class="QWidget" name="saveNonBiallelicWidget" native="true">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_19">
+          <property name="margin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="label_10">
+            <property name="text">
+             <string>Separate file for non-biallelic variants:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="nonBiallelicField">
+            <property name="readOnly">
+             <bool>false</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="browseNonBiallelicButton">
             <property name="text">
              <string>Browse...</string>
             </property>
@@ -1106,13 +1113,6 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="saveLogButton">
-       <property name="text">
-        <string>Save Log File</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="runButton">
        <property name="text">
         <string>Run</string>
@@ -1153,6 +1153,58 @@
    </property>
   </action>
  </widget>
+ <tabstops>
+  <tabstop>vcfPathField</tabstop>
+  <tabstop>browseVcfButton</tabstop>
+  <tabstop>kgpPathField</tabstop>
+  <tabstop>browseKgpButton</tabstop>
+  <tabstop>logPathField</tabstop>
+  <tabstop>browseLogButton</tabstop>
+  <tabstop>outputPathField</tabstop>
+  <tabstop>browseOutputButton</tabstop>
+  <tabstop>errorPathField</tabstop>
+  <tabstop>browseErrorButton</tabstop>
+  <tabstop>nonBiallelicField</tabstop>
+  <tabstop>browseNonBiallelicButton</tabstop>
+  <tabstop>createPopulationButton</tabstop>
+  <tabstop>treeWidget</tabstop>
+  <tabstop>removePopOrSampleButton</tabstop>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>includeAttributeList</tabstop>
+  <tabstop>removeAttributeButton</tabstop>
+  <tabstop>functionComboBox</tabstop>
+  <tabstop>targetPopComboBox</tabstop>
+  <tabstop>removeInfoList</tabstop>
+  <tabstop>addInfoButton</tabstop>
+  <tabstop>alleleReorderRadioButton</tabstop>
+  <tabstop>revertToRefAltCheckBox</tabstop>
+  <tabstop>alleleVcfOrderRadioButton</tabstop>
+  <tabstop>backPopComboBox</tabstop>
+  <tabstop>ascendingRadioButton</tabstop>
+  <tabstop>descendingRadioButton</tabstop>
+  <tabstop>createAttributeButton</tabstop>
+  <tabstop>csvPathField</tabstop>
+  <tabstop>browseCsvButton</tabstop>
+  <tabstop>csvColumnList</tabstop>
+  <tabstop>exactRadioButton</tabstop>
+  <tabstop>copyRadioButton</tabstop>
+  <tabstop>interpolateRadioButton</tabstop>
+  <tabstop>addCsvColumnButton</tabstop>
+  <tabstop>bedPathField</tabstop>
+  <tabstop>browseBedButton</tabstop>
+  <tabstop>bedScoreList</tabstop>
+  <tabstop>addBedScoreButton</tabstop>
+  <tabstop>filterList</tabstop>
+  <tabstop>removeFilterButton</tabstop>
+  <tabstop>browseBedFilterButton</tabstop>
+  <tabstop>expressionField</tabstop>
+  <tabstop>presetFiltersComboBox</tabstop>
+  <tabstop>allAttributeComboBox</tabstop>
+  <tabstop>addExpressionFilterButton</tabstop>
+  <tabstop>helpButton</tabstop>
+  <tabstop>quitButton</tabstop>
+  <tabstop>runButton</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>
