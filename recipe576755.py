@@ -1,7 +1,8 @@
 # based on Recipe 466302: Sorting big files the Python 2.4 way
 # by Nicolas Lehuen
 
-# tweaked by Alex Bigelow - increased default buffer_size slightly and added ticking functionality for progress bar (plus a way out if canceled), etc.
+# tweaked by Alex Bigelow - increased default buffer_size slightly and added ticking functionality for a progress bar (plus a way out if canceled), etc.
+# threw away the deprecated psyco stuff
 
 import os
 from tempfile import gettempdir
@@ -104,20 +105,9 @@ if __name__ == '__main__':
             providing multiples directories on differents physical disks.
             Use multiple -t options to do that.'''
     )
-    parser.add_option(
-        '-p','--psyco',
-        dest='psyco',
-        action='store_true',
-        default=False,
-        help='''Use Psyco.'''
-    )
     options,args = parser.parse_args()
 
     if options.key:
         options.key = eval('lambda line : (%s)'%options.key)
-
-    if options.psyco:
-        import psyco
-        psyco.full()
 
     batch_sort(args[0],args[1],options.key,options.buffer_size,options.tempdirs)

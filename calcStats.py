@@ -4,15 +4,11 @@ from genome_utils import kgpInterface, countingDict, parsePopulations
 
 class allStats:
     AF = 0
-    MAF = 1
     Sharing = 2
-    Minor_Sharing = 3
     Samples_w_calls = 4
     
     STAT_NAMES=['AF',
-                'MAF',
                 'Sharing',
-                'Minor_Sharing',
                 'Samples_w_calls']
     
     @staticmethod

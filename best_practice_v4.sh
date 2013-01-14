@@ -688,7 +688,7 @@ then
 			2>$TARGET_DIR/calls/logs/purged.$VCF_NAME.selectVariants.err.log &
 		waitForJobs
 	else
-		mv $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf
+		cp $TARGET_DIR/calls/all.$VCF_NAME.filtered.vcf $TARGET_DIR/calls/purged.$VCF_NAME.filtered.vcf
 	fi
 	
 	echo "...GATK SelectVariants (physically remove variants that didn't PASS)"
