@@ -528,6 +528,12 @@ then
 	mkdir $TARGET_DIR/calls
 	mkdir $TARGET_DIR/calls/logs
 	
+	rm -rf $TARGET_DIR/annotation
+	mkdir $TARGET_DIR/annotation
+	mkdir $TARGET_DIR/annotation/vaast
+	mkdir $TARGET_DIR/annotation/snpeff
+	mkdir $TARGET_DIR/annotation/snpeff/logs
+	
 	TEMP=""
 	for i in ${SAMPLES[*]}
 	do
@@ -737,12 +743,10 @@ fi
 if [ "$PHASE_START" == "annotate" ]
 then
 	echo "annotate..."
-	rm -rf $TARGET_DIR/annotation
-	mkdir $TARGET_DIR/annotation
+	
 	
 	echo "...VAAST"
-	rm -rf $TARGET_DIR/annotation/vaast
-	mkdir $TARGET_DIR/annotation/vaast
+	rm -rf $TARGET_DIR/annotation/vaast/$VCF_NAME
 	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME
 	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME/logs
 	
@@ -840,9 +844,6 @@ then
 	waitForJobs
 	
 	echo "...snpeff"
-	rm -rf $TARGET_DIR/annotation/snpeff
-	mkdir $TARGET_DIR/annotation/snpeff
-	mkdir $TARGET_DIR/annotation/snpeff/logs
 	
 	echo "......normal"
 	$RUN_JAVA -jar $SNPEFF_DIR/snpEff.jar \

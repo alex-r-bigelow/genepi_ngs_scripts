@@ -1,7 +1,10 @@
 #!/bin/bash
 # PHASE_START		"setup", "align", "build_bam", "sort_bam", "dedup", "realign", "recalibrate", "call", "filter", "annotate"
-#					Phase to begin with - most of the time it will be align unless you've added a new reference genome
-#					you're restarting after a crash
+#					Phase to begin with - most of the time it will be "align." If you've just added new support files (reference genome, etc), you'll want
+#					to start with "setup." If you're experimenting with MIN_PRUNING, you'll want to start with "call" (assuming you've already run once with a
+#					different parameter), or if you're experimenting with FILTER_MODE, you'll want to start with "annotate" (assuming, again, you've already run
+#					once with a different parameter). Otherwise, these stages are for help in restarting a job if the power goes out, the machine dies, etc. and
+#					you don't want to have to do everything over from the beginning.
 export PHASE_START="align"
 # PHASE_STOP		"align", "build_bam", "sort_bam", "dedup", "realign", "recalibrate", "call", "filter", "annotate", ""
 #					Phase before which to end; "" will run the whole pipeline. This option is useful for debugging
