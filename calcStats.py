@@ -4,23 +4,19 @@ from genome_utils import kgpInterface, countingDict, parsePopulations
 
 class allStats:
     AF = 0
-    Sharing = 2
-    Samples_w_calls = 4
+    Carriage = 1
+    Samples_w_calls = 2
     
     STAT_NAMES=['AF',
-                'Sharing',
-                'Samples_w_calls']
+                'Carriage',
+                'Samples w/Calls']
     
     @staticmethod
     def calculate(stat,line,indices):
         if stat == allStats.AF:
             return allStats.calcAF(line, indices)
-        elif stat == allStats.MAF:
-            return allStats.calcMAF(line, indices)
-        elif stat == allStats.Sharing:
-            return allStats.calcSharing(line, indices)
-        elif stat == allStats.Minor_Sharing:
-            return allStats.calcMinor_Sharing(line, indices)
+        elif stat == allStats.Carriage:
+            return allStats.calcCarriage(line, indices)
         elif stat == allStats.Samples_w_calls:
             return allStats.calcSamples_w_calls(line, indices)
         else:
@@ -45,13 +41,9 @@ class allStats:
             return [float('Inf') for a in line.alleles]
         else:
             return [matches.get(i,0)/count for i,a in enumerate(line.alleles)]
-    
+        
     @staticmethod
-    def calcMAF(line, indices):
-        return allStats.calcAF(line, indices)[1:]
-    
-    @staticmethod
-    def calcSharing(line, indices):
+    def calcCarriage(line, indices):
         line.extractAlleles()
         line.extractGenotypes(indices)
         
@@ -67,11 +59,7 @@ class allStats:
                     counts[allele0] += 1
                     counts[allele1] += 1
         return [counts.get(i,0) for i,a in enumerate(line.alleles)]
-    
-    @staticmethod
-    def calcMinor_Sharing(line, indices):
-        return allStats.calcSharing(line,indices)[1:]
-    
+        
     @staticmethod
     def calcSamples_w_calls(line, indices):
         line.extractGenotypes(indices)
@@ -132,15 +120,27 @@ def parseVcfHeader(path, outpath=None, popFile=""):
         else:
             raise Exception("Missing a header line or something else is wrong...")
     infile.close()
-    
+
+def extractCalcDetails(tag,):
 
 def run(args, tickFunction=tick):
     outfile,takenTags,headerline,myPopulations,myPopulationIndices = parseVcfHeader(args.infile,args.outfile,args.popFile)
     
-    statsToCalculate = {}   # {INFO tag : (allStats.statistic,population)}
+    statsToCalculate = {}   # {INFO tag : (allStats.statistic,targetPop,backgroundPop,"ASC"/"DEC",REF/ALT hack: True/False))}
+    alleleOrders = {}       # {backgroundPop : "ASC","DEC", or "BOTH"}
+    
+    def extractCalcDetails(stat,target,background,direction,hack):
+        
     
     if args.calculate_AF != None:
-        for p in args.calculate_AF:
+        for calculation in args.calculate_AF:
+            if not len(calculation) > 0:
+                raise Exception('Must specify a target population!')
+            else:
+                if not len(calculation) > 1:
+                    statsToCalculate[calculation[0]]
+            
+            
             dupNumber = 2
             tag = p + "_AF"
             while tag in takenTags:
@@ -260,22 +260,21 @@ if __name__ == '__main__':
     parser.add_argument('--populations', type=str, dest="popFile", nargs="?", const="", default="",
                         help='Tab-delimited .txt file containing populations in your .vcf file. A header is required, (each header is the population name), and each row under the header is a sample ID from the .vcf file indicating that that sample is a member of that population. If not supplied, all samples will be used and the population name will be the file name (e.g. "myFile.vcf"). '+
                         'See KGP_populations.txt for an example of how to format this file. Be careful to not reuse any of the column headers in KGP_populations.txt for your own data.')
-    parser.add_argument('--reorder_alleles', type=str, dest="reorder_alleles", nargs="?", const="ALL_KGP", default="ALL_KGP",
-                        help='The REF/ALT configuration from the sequencing pipeline is not necessarily the major/minor allele. Use '+
-                        'this option to reorder the REF/ALT configuration according to a given variant\'s frequency in a population. If the population has no data for a variant, then the REF/ALT configuration will be preserved. '+
-                        'The parameter should be a header in your --populations file or in KGP_populations.txt. If --reorder_alleles is "NO_REORDERING", no reordering will '+
-                        'take place. Default is ALL_KGP')
-    parser.add_argument('--calculate_AF', type=str, dest="calculate_AF", nargs="+",
-                        help='If True, calculates allele frequencies for every allele in each --population.')
-    parser.add_argument('--calculate_MAF', type=str, dest="calculate_MAF", nargs="+",
-                        help='Calculates allele frequencies for the minor allele (or alleles, in the case that a variant has more than one alternate '+
-                        'allele. WARNING: For a true MAF, --reorder_alleles should be set!')
-    parser.add_argument('--calculate_Sharing', type=str, dest="calculate_Sharing", nargs="+",
-                        help='If True, calculates the max possible sharing for every allele in each --population.')
-    parser.add_argument('--calculate_Minor_Sharing', type=str, dest="calculate_Minor_Sharing", nargs="+",
-                        help='If True, calculates the max possible sharing for every minor allele in each --population.')
-    parser.add_argument('--calculate_Samples_w_calls', type=str, dest="calculate_Samples_w_calls", nargs="+",
-                        help='If True, counts the number of samples have called genotypes for a variant in each --population.')
+    parser.add_argument('--calculate_AF', type=str, dest="calculate_AF", nargs="+", action="append",
+                        help='Recalculates allele frequencies, may be used multiple times. First argument should be the population in which to calculate allele frequencies. The second is '+
+                        'the background population: if omitted, the REF/ALT configuration of --in is used. The third argument is "ASC" or "DEC", indicating the '+
+                        'order of the alleles: if omitted, "ASC" is assumed. The fourth argument is "True" or "False"; if true, the REF/ALT order will be reused when '+
+                        'a variant has no data in the background population. As this is technically a violation of nomenclature, if omitted "False" is assumed.')
+    parser.add_argument('--calculate_Carriage', type=str, dest="calculate_Carriage", nargs="+", action="append",
+                        help='Counts the number of individuals who have at least one copy of an allele, may be used multiple times. First argument should be the population in which to calculate allele frequencies. The second is '+
+                        'the background population: if omitted, the REF/ALT configuration of --in is used. The third argument is "ASC" or "DEC", indicating the '+
+                        'order of the alleles: if omitted, "ASC" is assumed. The fourth argument is "True" or "False"; if true, the REF/ALT order will be reused when '+
+                        'a variant has no data in the background population. As this is technically a violation of nomenclature, if omitted "False" is assumed.')
+    parser.add_argument('--calculate_Samples_w_calls', type=str, dest="calculate_Samples_w_calls", nargs="+", action="append",
+                        help='Calculates the number of samples with calls, may be used multiple times. First argument should be the population in which to calculate allele frequencies. The second is '+
+                        'the background population: if omitted, the REF/ALT configuration of --in is used. The third argument is "ASC" or "DEC", indicating the '+
+                        'order of the alleles: if omitted, "ASC" is assumed. The fourth argument is "True" or "False"; if true, the REF/ALT order will be reused when '+
+                        'a variant has no data in the background population. As this is technically a violation of nomenclature, if omitted "False" is assumed.')
     
     args = parser.parse_args()
     run(args)

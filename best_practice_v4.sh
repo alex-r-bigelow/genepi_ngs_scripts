@@ -524,17 +524,6 @@ then
 	done
 	waitForJobs
 	
-	export PHASE_START="call"
-fi
-
-if [ "$PHASE_STOP" == "call" ]
-then
-	finish
-fi
-
-if [ "$PHASE_START" == "call" ]
-then
-	echo "call..."
 	rm -rf $TARGET_DIR/calls
 	mkdir $TARGET_DIR/calls
 	mkdir $TARGET_DIR/calls/logs
@@ -553,6 +542,18 @@ then
 		>$TARGET_DIR/calls/logs/all.merge.log \
 		2>$TARGET_DIR/calls/logs/all.merge.err.log &
 	waitForJobs
+	
+	export PHASE_START="call"
+fi
+
+if [ "$PHASE_STOP" == "call" ]
+then
+	finish
+fi
+
+if [ "$PHASE_START" == "call" ]
+then
+	echo "call..."
 	
 	if [ -z $MIN_PRUNING ]
 	then
