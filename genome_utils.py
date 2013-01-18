@@ -37,18 +37,21 @@ class genomeException(Exception):
     pass
 
 def parsePopulations(path):
-    populations = {}
-    infile=open(path,'rb')
-    header = infile.readline().strip().split('\t')
-    for h in header:
-        populations[h] = []
-    for line in infile:
-        columns = line.strip().split('\t')
-        for i,c in enumerate(columns):
-            if c != "":
-                populations[header[i]].append(c)
-    infile.close()
-    return (populations,header)
+    with open(path,'rb') as infile:
+        populations = {}
+        header = None
+        for line in infile:
+            if line.startswith('#\t'):
+                if header == None:
+                    header = line.strip().split('\t')[1:]
+                else:
+                    columns = line.strip().split('\t')[1:]
+                    for i,c in enumerate(columns):
+                        if c != "":
+                            if not populations.has_key(header[i]):
+                                populations[header[i]] = []
+                            populations[header[i]].append(c)
+        return (populations,header)
 
 def standardizeChromosome(chrom):
     if not chrom.lower().startswith("chr"):
@@ -417,11 +420,11 @@ class kgpInterface:
                     self.files[chrname]=gzip.open(fullpath,'rb')
         for line in self.files.itervalues().next(): # just grab one of the files
             if line.startswith("#CHROM"):
-                header = line.strip().split('\t')
+                self.header = line.strip().split('\t')
                 for p,individuals in self.populations.iteritems():
                     self.populationIndices[p] = []
                     for i in individuals:
-                        self.populationIndices[p].append(header.index(i)-9)
+                        self.populationIndices[p].append(self.header.index(i)-9)
                 break
         self.startAtZero()
     
@@ -429,7 +432,7 @@ class kgpInterface:
         for f in self.files.itervalues():
             f.seek(0)
     
-    def iterateVcf(self, vcfPath, tickFunction=None, numTicks=1000):
+    def iterateVcf(self, vcfPath, tickFunction=None, numTicks=100):
         ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be
         base pair position-ordered (the chromosome order is irrelevant) '''
                 

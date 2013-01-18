@@ -751,7 +751,7 @@ then
 	mkdir $TARGET_DIR/annotation/vaast/$VCF_NAME/logs
 	
 	echo "......removeAlternateContigs"
-	python removeAlternateContigs.py \
+	python ${0%best_practice_v4.sh}removeAlternateContigs.py \
 		--in $TARGET_DIR/calls/$VCF_NAME.vcf \
 		--out $TARGET_DIR/annotation/vaast/$VCF_NAME/basicContigs.vcf \
 		>$TARGET_DIR/annotation/vaast/$VCF_NAME/logs/removeAlternateContigs.log \
