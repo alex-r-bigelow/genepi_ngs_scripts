@@ -193,11 +193,11 @@ MAX_SAMPLE_MEM=$(( $MAX_BYTE_MEM/$NUM_SAMPLES ))
 RUN_JAVA="$JAVA/bin/java -Xmx$MAX_SAMPLE_MEM"
 
 VCF_NAME=""
-if [ -z $1 ]
+if [ -z $MIN_PRUNING ]
 then
 	VCF_NAME="unifiedGenotyper"
 else
-	VCF_NAME="haplotypeCaller$1"
+	VCF_NAME="haplotypeCaller$MIN_PRUNING"
 fi
 
 # silently test if we have enough memory... but fail early if we don't
@@ -592,7 +592,7 @@ then
 			-o $TARGET_DIR/calls/$VCF_NAME.raw.vcf \
 			-R $REF_FASTA \
 			--dbsnp $REF_DBSNP \
-			--minPruning $1 \
+			--minPruning $MIN_PRUNING \
 			>$TARGET_DIR/calls/logs/$VCF_NAME.log \
 			2>$TARGET_DIR/calls/logs/$VCF_NAME.err.log &
 		waitForJobs
