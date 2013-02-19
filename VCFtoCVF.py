@@ -1,185 +1,149 @@
 #!/usr/bin/env python
-import argparse, datetime, math
-from genome_utils import vcfLine, countingDict, infoDetails, MAX_INFO_STRINGS
+import argparse, datetime, math, sys
+from genome_utils import standardizeChromosome, vcfLine, countingDict, infoDetails, MAX_INFO_STRINGS
 
 def run(args):
     
     separateInfoFields = args.separate_info_fields.strip().lower() == "true"
+    countSeparate = args.count_separate.strip().lower() == "true"
     
-    maxAlleles = 0
-    maxFilters = 0
-    pragmaFilterTags = set()
-    filterColumn = infoDetails("FILTER", args.max_strings, separateInfoFields)
-    maxQual = 0.0
-    infoFields = {}
+    posLengthWarned = False
+    allChrs = []
+    positions = []
+    alleleColumn = infoDetails("Ref/Alt", 1, False)
+    qualColumn = infoDetails("QUAL", 1, False)
+    filterColumn = infoDetails("FILTER", args.max_strings, False)
+    infoFields = {"Ref/Alt":alleleColumn,"QUAL":qualColumn,"FILTER":filterColumn}
     # TODO: get the numeric ranges, all valid categorical values
     
     print "Counting columns, ranges, values...",
     infile = open(args.infile,'r')
     for line in infile:
         line = line.strip()
-        if len(columns) <= 1:
+        if len(line) <= 1:
             continue
         elif line.startswith("#"):
-            if line.startswith("##INFO"):
-                newTag = line[line.find("ID=")+3:]
+            temp = line.lower()
+            if temp.startswith("##info"):
+                newTag = line[temp.find("id=")+3:]
                 newTag = newTag[:newTag.find(',')]
                 if infoFields.has_key(newTag):
                     raise Exception("Duplicate INFO ID or use of reserved ID:\t%s" % newTag)
-                infoFields[newTag] = infoDetails(newTag, args.max_strings,separateInfoFields)
-            elif line.startswith("##FILTER"):
-                newTag = line[line.find("ID=")+3:]
+                infoFields[newTag] = infoDetails(newTag, args.max_strings, countSeparate)
+            elif temp.startswith("##filter"):
+                newTag = line[temp.find("id=")+3:]
                 newTag = newTag[:newTag.find(',')]
-                if newTag in pragmaFilterTags:
-                    raise Exception("Duplicate FILTER ID: %s" % newTag)
-                pragmaFilterTags.add(newTag)
-                if not separateInfoFields:
-                    filterColumn.addCategory(newTag, 0)
-            continue
+                filterColumn.addCategory(newTag, 0)
+            elif temp.startswith("##contig"):
+                chrom = line[temp.find("id=")+3:]
+                chrom = newTag[:chrom.find(',')]
+                chrom = standardizeChromosome(chrom)
+                chrLength = line[temp.find("length=")+3:]
+                chrLength = chrLength[:chrLength.find(',')]
+                
+                allChrs.append(chrom)
+                positions.append((0,int(chrLength)))
+            else:
+                # a sneaky way of freezing the filter column; if other filters are added (without a .vcf pragma line) or we aren't separating info fields,
+                # other strings will make this column max out early
+                filterColumn.maxCategories = len(filterColumn.categories[0])
         else:
             line = vcfLine(line.split('\t'))
-            line.extractAlleles()
-            line.extractQual()
-            line.extractFilters()
-            line.extractInfo()
-            maxAlleles = max(maxAlleles,len(line.alleles))
-            maxQual = max(maxQual,line.qual)
-            maxFilters = max(maxFilters,len(line.filters))
-            for i,f in enumerate(line.filters):
-                if not f in pragmaFilterTags:
-                    raise Exception("Missing ##FILTER pragma for: %s" % f)
-                filterColumn.addCategory(f,i)
+            line.extractChrAndPos()
             
+            if not line.chromosome not in allChrs:
+                allChrs.append(line.chromosome)
+                positions.append((0,0))
+            chrIndex = allChrs.index(line.chromosome)
+            if line.position > positions[chrIndex][1]:
+                positions[chrIndex] = (0,line.position)
+                if not posLengthWarned:
+                    sys.stderr.write('WARNING: Either ##contig pragma lines aren\'t supplied in your .vcf file or a variant has a position beyond the length of a chromosome.')
+                    sys.stderr.write(' In either case, be aware that chromosome lengths in the .cvf file may not be accurate.')
+                    posLengthWarned = True
+            
+            line.extractAlleles()
+            alleles = line.alleles
+            if not separateInfoFields:
+                alleles = ",".join(alleles)
+            alleleColumn.addArbitraryValue(line.alleles)
+            
+            line.extractQual()
+            qualColumn.addArbitraryValue(line.qual)
+            
+            line.extractFilters()
+            filters = line.filters
+            if not separateInfoFields:
+                filters = ",".join(filters)
+            filterColumn.addArbitraryValue(filters)
+            
+            line.extractInfo()
             for k,v in line.info.iteritems():
-                if k == 'ALT' or k == 'FILTER':
-                    continue
-                elif not infoFields.has_key(k):
+                if not infoFields.has_key(k):
                     raise Exception("Missing ##INFO pragma for: %s" % k)
-                else:
-                    infoFields[k].addArbitraryValue(v)
+                if separateInfoFields:
+                    v = ",".split(v)
+                infoFields[k].addArbitraryValue(v)
     infile.close()
     
     print "Creating file..."
     outfile = open(args.outfile, 'w')
     
-    outfile.write("##\t%s created from %s on %s\n" % (args.outfile,args.str(infile,datetime.datetime.now())))
-    outfile.write("#\tChromosome\tCHR\n")
-    outfile.write("#\tPosition\tPOS\n")
+    outfile.write("##\t%s created from %s on %s\n" % (args.outfile,args.infile,str(datetime.datetime.now())))
+    outfile.write("#\tChromosome\tCHR\t%s\n" % ("\t".join(allChrs)))
+    outfile.write("#\tPosition\tPOS\t%s\n" % ("\t".join(["(%i,%i)" % p for p in positions])))
     outfile.write("#\tID\tID\n")
-    for i in xrange(len(numColumns['ALT'])):
-        outfile.write("#\tAllele %i\tIGNORE\n" % (i+1))
-    outfile.write("#\tQUAL\tNUMERIC\t0.0\t%f\n" % maxQual)
-    for k,v in sorted(numColumns.iteritems()):
-        # TODO: continue here!
     
-    outfile.write('Chromosome\tPosition')
-    for i in xrange(numAlleles):
-        outfile.write('\tAllele %i'%i)
-    for i in xrange(numAlleles):
-        outfile.write('\t# Sharing Allele %i'%i)
-    outfile.write('\t# Samples w/data')
-    for i in xrange(numAlleles):
-        outfile.write('\tAllele %i Frequency'%i)
-    for i in xrange(numAlleles):
-        outfile.write('\tAllele %i KGP Frequency'%i)
+    headers = []
+    fieldOrder = sorted(infoFields.iterkeys())
+    for f in fieldOrder:
+        pragmas = infoFields[f].getPragmas()
+        for p in pragmas:
+            outfile.write(p + "\n")
+            h = p.split("\t")[1]
+            headers.append(h)
     
-    total = 0
-    noData = 0
-    passedKGP = 0
-    sharingCounts = countingDict()
-    sharingFractions = {}
-        
-    for line,kgpLine in kgp.iterateVcf(args.infile,tickFunction=tick,numTicks=1000):
-        outfile.write('\n')
-        
-        # write chromosome, position
-        outfile.write('%s\t%i'%(line.chromosome,line.position))
-        
+    outfile.write('Chromosome\tPosition\tID\t%s\n' % ("\t".join(headers)))
+    
+    infile = open(args.infile,'r')
+    for line in infile:
+        line = line.strip()
+        if len(line) <= 1 or line.startswith("#"):
+            continue
+        line = vcfLine(line.split('\t'))
+        line.extractChrAndPos()
+        line.extractInfo()
         line.extractAlleles()
-        
-        for a in line.alleles:
-            outfile.write('\t%s'% a)
-        for x in xrange(numAlleles-len(line.alleles)):
-            outfile.write('\t-')
-        
-        # write sharing per allele
-        sharing = line.getSharing()
-        for a in line.alleles:
-            outfile.write('\t%i'%sharing[a])
-        for x in xrange(numAlleles-len(line.alleles)):
-            outfile.write('\t-')
-        
-        # write sharing denominator
-        numberWithData = line.numberOfSamplesWithData()
-        outfile.write('\t%i'%numberWithData)
-        
-        # write allele frequencies in file
-        frequencies = line.getAlleleFrequencies()
-        for a in line.alleles:
-            outfile.write('\t%f'%frequencies[a])
-        for x in xrange(numAlleles-len(line.alleles)):
-            outfile.write('\t-')
-        
-        # write kgp allele frequencies
-        kgpFrequencies = None
-        if kgpLine == None:
-            for a in line.alleles:
-                outfile.write('\tND')
-            for x in xrange(numAlleles-len(line.alleles)):
-                outfile.write('\t-')
-        else:
-            kgpLine.extractGenotypes()
-            kgpFrequencies = kgpLine.getAlleleFrequencies()
-            for a in line.alleles:
-                if kgpFrequencies.has_key(a):
-                    outfile.write('\t%f'%kgpFrequencies[a])
+        line.info["Ref/Alt"] = line.alleles
+        line.extractQual()
+        line.info["QUAL"] = str(line.qual)
+        line.extractFilters()
+        line.info["FILTER"] = line.filters
+        outfile.write("%s\t%i\t%s" % (line.chromosome,line.position,line.id))
+        for f in fieldOrder:
+            values = line.info[f]
+            if isinstance(values,list):
+                if separateInfoFields:
+                    values = "\t".join(values)
                 else:
-                    outfile.write('\tND')
-            for x in xrange(numAlleles-len(line.alleles)):
-                outfile.write('\t-')
-        
-        # count stuff for final output
-        total += 1
-        if kgpLine == None or numberWithData == 0:
-            noData += 1
-        else:
-            lowestFreq = 1.0
-            minorAllele = None
-            for a in line.alleles:
-                if kgpFrequencies.has_key(a):
-                    if kgpFrequencies[a] < lowestFreq:
-                        lowestFreq = kgpFrequencies[a]
-                        minorAllele = a
-            if lowestFreq <= 0.01:
-                passedKGP += 1
-                
-                proportion = sharing[minorAllele]/float(numberWithData)
-                sharingCounts[proportion] += 1
-                sharingFractions[proportion] = (sharing[minorAllele],numberWithData)
-    
+                    values = ",".join(values)
+            outfile.write("\t%s" % values)
+        outfile.write("\n")
     infile.close()
     outfile.close()
-    print ""
-    print "Done"
-    print ""
-    print "Total number of variants: %i" % total
-    print "# of variants with at least some data from both sources: %i" % (total-noData)
-    print "# left if variants with no allele <= 0.01 are removed: %i" % passedKGP
-    temptotal = 0
-    for p,c in sorted(sharingCounts.iteritems()):
-        print "# left if variants sharing < %i/%i of the minor KGP allele are removed: %i" % (sharingFractions[p][0],sharingFractions[p][1],passedKGP-temptotal)
-        temptotal += c
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Creates a .cvf file from the CHROM, POS, ID, REF, ALT, QUAL, FILTER, and INFO fields of a .vcf file')
-    parser.add_argument('--in', type=str, dest="infile",
+    parser.add_argument('--in', type=str, dest="infile", required=True,
                         help='Path to .vcf file')
-    parser.add_argument('--out', type=str, dest="outfiles", nargs="+",
+    parser.add_argument('--out', type=str, dest="outfiles", required=True,
                         help='Path to .cvf file')
     parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=MAX_INFO_STRINGS, default=MAX_INFO_STRINGS,
-                        help='Maximum number of strings a categorical INFO field can have before it\'s automatically marked as IGNORE')
-    parser.add_argument('--separate_info_fields', type=str, dest="separate_info_fields", nargs="?", const="False", default="False",
-                        help='When an INFO field has multiple comma-delimited values, count possible ranges and categories separately')
+                        help='Maximum number of strings a categorical INFO field can have before it\'s automatically marked as IGNORE. If zero or negative, no limit is enforced. Default is %i.' % MAX_INFO_STRINGS)
+    parser.add_argument('--separate_info_fields', type=str, dest="separate_info_fields", nargs="?", const="True", default="False",
+                        help='When an INFO field has multiple comma-delimited values, split them into separate columns.')
+    parser.add_argument('--count_separate', type=str, dest="count_separate", nargs="?", const="True", default="False",
+                        help='If --separate_info_fields is supplied, this option will count each column\'s ranges and categorical values separately.')
     
     args = parser.parse_args()
     run(args)

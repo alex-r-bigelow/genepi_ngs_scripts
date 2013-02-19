@@ -9,7 +9,7 @@ class allStats:
     
     STAT_NAMES=['AF',
                 'Carriage',
-                'SamplesWcalls']
+                'Samples_w_calls']
     
     @staticmethod
     def calculate(stat,vcfLine,vcfIndices,kgpLine,kgpIndices,alleles):
@@ -299,10 +299,11 @@ if __name__ == '__main__':
                         help='input .vcf file')
     parser.add_argument('--out', type=str, dest="outfile", required=True,
                         help='output .vcf file')
-    parser.add_argument('--data', type=str, dest="data", required=True,
-                        help='Path to directory containing 1000 genomes .vcf.gz files 1-22,X,Y.')
+    parser.add_argument('--data', type=str, dest="data",
+                        help='Path to directory containing 1000 Genomes .vcf.gz files 1-22,X,Y. Required if any stats involving 1000 Genomes populations are to be calculated.')
     parser.add_argument('--populations', type=str, dest="popFile", nargs="?", const="", default="",
-                        help='Population file describing samples in your .vcf file. See the VCF Cleaner help page (http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Populations) for details.')
+                        help='Population file describing samples in your .vcf file. If no file is supplied, one population containing all the samples in --in is assumed (its name is the same as the file, e.g. if my --in ' +
+                        'parameter is "/Users/Home/Desktop/myFile.vcf", the population name would be "myFile.vcf"). See the VCF Cleaner help page (http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Populations) for details.')
     parser.add_argument('--calculate_AF', type=str, dest="calculate_AF", nargs="+", action="append",
                         help='Recalculates allele frequencies, may be used multiple times. At least one argument is required. The first argument should be the population in which to calculate allele frequencies. The second is '+
                         'the background population; per-allele values will be ordered by AF in this population. If omitted, the ALT allele order from --in is used. The third argument is "ASC" or "DEC", indicating '+

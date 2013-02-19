@@ -125,7 +125,7 @@ if __name__ == '__main__':
                         "Any valid python eval() code is permitted.")
     parser.add_argument('--columns', type=str, dest="columns", nargs="?", default="",
                         help="File containing INFO field IDs or 'CHROM', 'POS', 'ID', 'QUAL' or 'FILTER' to\n"+
-                        "use in --expression. Note that CHROM will always be a string beginning\n"+
+                        "use in --expression. CHROM will always be converted to a string beginning\n"+
                         "with \"chr\", regardless of the .vcf format, POS will always be an integer,\n"+
                         "FILTER will always be a list (even if it just has one element), and INFO \n"+
                         "fields will be a list if a comma is present in the value, otherwise it will\n"+

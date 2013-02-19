@@ -76,14 +76,12 @@ class vcfKey:
                 raise Exception("Duplicate ##fileformat or header lines!")
 
 class csvKey:
-    firstLineSeen = False
     delimiter = None
     chromColumn = None
     posColumn = None
     
     def __init__(self, line):
-        if not csvKey.firstLineSeen:
-            csvKey.firstLineSeen = True
+        if "CHROM" in line and "POS" in line:
             self.isFirstLine = True
             self.line = line
         else:

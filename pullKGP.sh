@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# downloads the compressed KGP .vcf files to the current directory
+# downloads the compressed KGP .vcf files to the directory supplied as a parameter... be warned, this is a huge amount of data
+
+cd $1
 
 for c in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X
 do

@@ -128,13 +128,16 @@ class vcfLine:
     def extractInfo(self):
         if not hasattr(self, 'info'):
             self.info = {}
-            for i in self.columns[7].split(';'):
+            fields = self.columns[7].split(';')
+            for i in fields:
                 if '=' in i:
                     values = i.split('=')
                     key = values[0]
                     value = values[1]
                     if ',' in value:
                         value = value.split(',')
+                elif i == "":
+                    continue
                 else:
                     key = i
                     value = None
@@ -292,22 +295,21 @@ class vcfLine:
         return outline + '\n'
 
 class infoDetails:
-    def __init__(self, id, maxCategories, separateInfoFields):
+    def __init__(self, id, maxCategories, countSeparate):
         self.ranges = []    # nth column : (low,high) or None, indicating that the column exists, but there are no numerical values
         self.categories = []    # nth column : set(possible keys) or None, indicating that the column exists, but there are no strings
-        
-        self.globalRange = None
-        self.globalCategories = None
-        
+                
         self.id = id
         self.maxCategories = maxCategories
-        self.separateInfoFields = separateInfoFields
+        self.countSeparate = countSeparate
         
+        self.numColumns = 1
         self.maxedOut = False
     
     def addArbitraryValue(self, fields):
         if not isinstance(fields,list):
             fields = [fields]
+        self.numColumns = max(len(fields),self.numColumns)
         for i,f in enumerate(fields):
             if f == None:
                 continue
@@ -316,13 +318,15 @@ class infoDetails:
                 if math.isnan(f):
                     self.addCategory('NaN',i)
                 elif math.isinf(f):
-                    self.addCategory("Inf", i)
+                    self.addCategory("Inf",i)
                 else:
-                    self.addValue(f, i)
+                    self.addValue(f,i)
             except ValueError:
-                self.addCategory(f, i)
+                self.addCategory(f,i)
     
     def addValue(self, v, i):
+        if not self.countSeparate:
+            i = 0
         while i >= len(self.ranges):
             self.ranges.append(None)
         
@@ -330,16 +334,13 @@ class infoDetails:
             self.ranges[i] = (v,v)
         else:
             self.ranges[i] = (min(v,self.ranges[i][0]),max(v,self.ranges[i][1]))
-        
-        if self.globalRange == None:
-            self.globalRange = (v,v)
-        else:
-            self.globalRange = (min(v,self.globalRange[0]),max(v,self.globalRange[1]))
     
     def addCategory(self, v, i):
         if self.maxedOut:
             return
         
+        if not self.countSeparate:
+            i = 0
         while i >= len(self.categories):
             self.categories.append(None)
         
@@ -347,52 +348,46 @@ class infoDetails:
             self.categories[i] = set()
         self.categories[i].add(v)
         
-        if self.globalCategories == None:
-            self.globalCategories = set()
-        self.globalCategories.add(v)
-        
-        if self.separateInfoFields:
-            if len(self.categories[i]) > self.maxCategories:
-                self.maxedOut = True
-        else:
-            if len(self.globalCategories) > self.maxCategories:
-                self.maxedOut = True
+        if self.maxCategories > 0 and len(self.categories[i]) > self.maxCategories:
+            self.maxedOut = True
     
-    def hasCategory(self, value, i=None):
-        if i == None or not self.separateInfoFields:
-            return value in self.globalCategories
-        else:
-            return value in self.categories[i]
+    def hasCategory(self, value, i=0):
+        return value in self.categories[i]
     
-    def getPragmas(self):
+    def getPragmas(self, override=None):
         results = []
-        for i in xrange(max(len(self.ranges),len(self.categories))):
-            pragmaString = "#\t%s %i\t" % (self.id, i+1)
-            if self.maxedOut:
-                pragmaString += "IGNORE"
+        for i in xrange(self.numColumns):
+            if i == 0:
+                pragmaString = "#\t%s\t" % self.id
             else:
-                if self.separateInfoFields:
-                    if self.ranges[i] == None:
-                        if self.categories[i] == None:
-                            continue
-                        else:
-                            pragmaString += "CATEGORICAL\t" + "\t".join(sorted(self.categories[i]))
+                pragmaString = "#\t%s %i\t" % (self.id, i+1)
+            
+            if override != None:
+                pragmaString += override
+            elif self.maxedOut:
+                pragmaString += "IGNORE"
+                results.append(pragmaString)
+                continue
+            else:
+                if self.ranges[i] == None:
+                    if self.categories[i] == None:
+                        pragmaString += "IGNORE"
                     else:
-                        if self.categories[i] == None:
-                            pragmaString += "NUMERIC\t%f\t%f" % self.ranges[i]
-                        else:
-                            pragmaString += "MIXED\t%f\t%f\t" % self.ranges[i] + "\t".join(sorted(self.categories[i]))
+                        pragmaString += "CATEGORICAL"
                 else:
-                    if self.globalRange == None:
-                        if self.globalCategories == None:
-                            continue
-                        else:
-                            pragmaString += "CATEGORICAL\t" + "\t".join(sorted(self.globalCategories))
+                    if self.categories[i] == None:
+                        pragmaString += "NUMERIC"
                     else:
-                        if self.globalCategories == None:
-                            pragmaString += "NUMERIC\t%f\t%f" % self.globalRange
-                        else:
-                            pragmaString += "MIXED\t%f\t%f\t" + self.ranges[i] + "\t".join(sorted(self.categories[i]))
+                        pragmaString += "MIXED"
+            
+            if self.ranges[i] != None:
+                # TODO: allow rounding to nearest tens...
+                pragmaString += "\t(%f,%f)" % self.ranges[i]
+            
+            if self.categories[i] != None:
+                # TODO: sort categories by their frequency?
+                pragmaString += "\t" + "\t".join(sorted(self.categories[i]))
+            
             results.append(pragmaString)
         return results
 
@@ -411,22 +406,26 @@ class kgpInterface:
         self.populations = parsePopulations(popPath)[0]
         self.populationIndices = {}
         self.files = {}
-        for dirname, dirnames, filenames in os.walk(dataPath):
-            for filename in filenames:
-                if filename.endswith('.vcf.gz') and 'chr' in filename:
-                    chrname = filename[filename.find("chr"):]
-                    chrname = chrname[:chrname.find(".")]
-                    fullpath = os.path.join(dirname,filename)
-                    self.files[chrname]=gzip.open(fullpath,'rb')
-        for line in self.files.itervalues().next(): # just grab one of the files
-            if line.startswith("#CHROM"):
-                self.header = line.strip().split('\t')
-                for p,individuals in self.populations.iteritems():
-                    self.populationIndices[p] = []
-                    for i in individuals:
-                        self.populationIndices[p].append(self.header.index(i)-9)
-                break
-        self.startAtZero()
+        if dataPath != None:
+            self.valid = True
+            for dirname, dirnames, filenames in os.walk(dataPath):
+                for filename in filenames:
+                    if filename.endswith('.vcf.gz') and 'chr' in filename:
+                        chrname = filename[filename.find("chr"):]
+                        chrname = chrname[:chrname.find(".")]
+                        fullpath = os.path.join(dirname,filename)
+                        self.files[chrname]=gzip.open(fullpath,'rb')
+            for line in self.files.itervalues().next(): # just grab one of the files
+                if line.startswith("#CHROM"):
+                    self.header = line.strip().split('\t')
+                    for p,individuals in self.populations.iteritems():
+                        self.populationIndices[p] = []
+                        for i in individuals:
+                            self.populationIndices[p].append(self.header.index(i)-9)
+                    break
+            self.startAtZero()
+        else:
+            self.valid = False
     
     def startAtZero(self):
         for f in self.files.itervalues():
@@ -435,15 +434,11 @@ class kgpInterface:
     def iterateVcf(self, vcfPath, tickFunction=None, numTicks=100):
         ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be
         base pair position-ordered (the chromosome order is irrelevant) '''
-                
+        infile = open(vcfPath,'rb')
+        tickInterval = os.path.getsize(vcfPath)/numTicks
         # We take advantage of the fact that the KGP .vcf files are bp-ordered
         self.startAtZero()
-        
-        infile = open(vcfPath,'r')
-        
-        tickInterval = os.path.getsize(vcfPath)/numTicks
-        
-        return self._iterateVcf(infile, tickFunction, tickInterval)
+        return self._iterateVcf(infile, tickFunction, tickInterval)            
     
     def _iterateVcf(self, infile, tickFunction, tickInterval):
         nextTick = 0
@@ -462,7 +457,7 @@ class kgpInterface:
             vline.extractChrAndPos()
             
             # If we're missing data for a particular chromosome (e.g. chrMT, etc), just harmlessly return that that line is missing
-            if not kgpLines.has_key(vline.chromosome):
+            if not self.valid or not kgpLines.has_key(vline.chromosome):
                 yield (vline,None)
                 continue
             

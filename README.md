@@ -1,11 +1,11 @@
 genepi_ngs_scripts
 ==================
 
-Scripts, tools for working with next-generation sequencing data
+Scripts, tools for working with next-generation sequencing data. For a very simple example of how to use my library in your own scripts, see sampleParse.py
 
 best_practice_v4.sh, example.sh
 -------------------------------
-BWA/GATK calling pipeline per GATK Best Practice v4. Options aren't yet comprehensive enough to cover the whole spec - for now, this assumes the "Best" post-processing strategy and uses hard filters (I only work with a few samples at a time).
+BWA/GATK calling pipeline per GATK Best Practice v4 (http://www.broadinstitute.org/gatk/guide/topic?name=best-practices). Options aren't yet comprehensive enough to cover the whole spec: for now, this assumes the "Best" post-processing strategy and uses hard filters (I only work with a few samples at a time).
 
 To use this, you should make a copy of example.sh (named appropriately) for each run that you do, tweaking its parameters as needed.
 
@@ -22,10 +22,10 @@ This also makes use of:
 
 vcfCleaner.py
 -------------
-A GUI front end to all the other scripts (which can still run independently):
+A GUI front end to scripts that can manipulate/clean the results of the pipeline. The GUI is not quite ready, but each script can run independently:
 
 - sort.py:
-  Should be run on any file that is to be fed to any of these other scripts (sorts chromosomes, positions in 1-22,X,Y. All other chromosomes come after in alphabetic order (chrUn, MT, etc))
+  Should be run on any file that is to be fed to any of these other scripts (sorts chromosomes, positions in 1-22,X,Y. All other chromosomes (chrUn, MT, etc) come after in alphabetic order)
 
 - addBEDtoVCF.py:
   Adds per-feature scores in a .bed file to every intersecting variant in a .vcf file

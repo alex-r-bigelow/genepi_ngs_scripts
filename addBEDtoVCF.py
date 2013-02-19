@@ -8,15 +8,24 @@ def sniffBed(path):
     tempfile = open(path, 'r')
     for line in tempfile:
         line = bedLine(line.split())
-        bedRegions.append(line)
         if not hasattr(line,'name') or not hasattr(line,'score'):
-            raise genomeException("To append scores to variants from a .bed file, each feature must have a name and score.")
+            continue
+        bedRegions.append(line)
         scoreNames.add(line.name)
     tempfile.close()
     return (scoreNames,bedRegions)
 
 def run(args):
     scoreNames,bedRegions = sniffBed(args.bedfile)
+    
+    if args.names != None:
+        scoreNames.difference_update(args.names)
+        regionsToRemove = set()
+        for i,r in bedRegions:
+            if r.name not in scoreNames:
+                regionsToRemove.add(i)
+        for i in regionsToRemove:
+            del bedRegions[i]
     
     vcffile = open(args.infile,'r')
     outfile = open(args.outfile,'w')
@@ -63,12 +72,14 @@ if __name__ == '__main__':
                                     'result in modified tags). As you could embed multiple values separated by commas, '+
                                     'the INFO Number= parameter will be \".\" If you care about this, you\'ll need to '+
                                     'change this yourself manually.')
-    parser.add_argument('--in', type=str, dest="infile",
+    parser.add_argument('--in', type=str, dest="infile", required=True,
                         help='input .vcf file')
-    parser.add_argument('--bed', type=str, dest="bedfile",
+    parser.add_argument('--bed', type=str, dest="bedfile", required=True,
                         help='input .bed file')
-    parser.add_argument('--out', type=str, dest="outfile",
+    parser.add_argument('--out', type=str, dest="outfile", required=True,
                         help='output .vcf file')
+    parser.add_argument('--names', type=str, dest="names", nargs="+",
+                        help='List of .bed region names to use (all others will be ignored). If unspecified, all features will be used. Unnamed/unscored features will always be ignored.')
     
     args = parser.parse_args()
     run(args)
