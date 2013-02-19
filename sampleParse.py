@@ -1,8 +1,9 @@
 from genome_utils import vcfLine
 
 '''
-A very basic sample script showing how to use vcfLine; takes a .vcf file as "input.vcf" and writes an "output.csv" file with each
-genotype from the .vcf file.
+A very basic sample script showing how to use vcfLine;
+takes a .vcf file as "input.vcf" and writes an "output.csv"
+file containing each genotype from the .vcf file.
 '''
 
 with open('input.vcf','rb') as infile, open('output.csv','wb') as outfile:

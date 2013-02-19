@@ -981,21 +981,18 @@ class gui:
         
         # If there isn't a valid log path, we'll still dump one to a temp directory
         logPath = self.window.logPathField.text()
-        vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles = self.generateLogFile(logPath)
+        outPath = self.window.outputPathField.text()
+        vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf = self.generateLogFile(logPath)
         
         # Run if we need to
         if hasOutput:
             numTicks = TICKS_PER_PROCESS * len(sourceFiles)
-            if len(self.removedAttributes) > 0:
-                numTicks += TICKS_PER_PROCESS
-            if len(statsToCalculate) > 1:
-                numTicks += TICKS_FOR_LONG_PROCESSES
+            numTicks += TICKS_PER_PROCESS
+            numTicks += TICKS_FOR_LONG_PROCESSES
             numTicks += TICKS_PER_PROCESS*len(bedAttribFiles)
             numTicks += TICKS_PER_PROCESS*len(csvAttribFiles)
             numTicks += TICKS_PER_PROCESS*len(self.variantFilters)
-            outPath = self.window.outputPathField.text()
-            if outPath.strip().lower().endswith('cvf'):
-                numTicks += TICKS_PER_PROCESS
+            numTicks += TICKS_PER_PROCESS
             
             # Okay, we've sorted out how many ticks we need, now show the dialog
             # count number of categorical values - this probably needs a progress bar
@@ -1027,7 +1024,7 @@ class gui:
                 tempTicks += TICKS_PER_PROCESS
             
             # Throw out fields we explicitly decided we want to remove
-            if len(self.removedAttributes) > 0:
+            if not isCvf and len(self.removedAttributes) > 0:
                 progress.setLabelText("Cleaning fields...")
                 progress.setValue(TICKS_PER_PROCESS * len(sourceFiles))
                 
@@ -1159,7 +1156,7 @@ class gui:
             # We're almost done... convert to .cvf or copy to the target destination
             tempTicks = TICKS_PER_PROCESS * len(sourceFiles) + TICKS_PER_PROCESS + TICKS_FOR_LONG_PROCESSES + TICKS_PER_PROCESS * len(bedAttribFiles) + TICKS_PER_PROCESS * len(csvAttribFiles) + TICKS_PER_PROCESS * len(self.variantFilters)
 
-            if outPath.strip().lower().endswith('cvf'):
+            if isCvf:
                 progress.setLabelText("Converting to .cvf...")
                 progress.setValue(tempTicks)
                 
@@ -1169,6 +1166,7 @@ class gui:
                 args.max_strings = 0    # we've already gotten rid of problematic columns
                 args.separate_info_fields = "True"
                 args.count_separate = "False"
+                args.ignore = [a.name for a in self.removedAttributes]
                 
                 VCFtoCVF.run(args)
             else:
@@ -1187,6 +1185,8 @@ class gui:
         outfile.write('TMP_DIR=%s\n\n' % TMP_DIR)
         
         vcfPath = self.window.vcfPathField.text()
+        outPath = self.window.outputPathField.text()
+        isCvf = outPath.strip().lower().endswith('cvf')
         
         sourceFiles = set()
         statsToCalculate = ""
@@ -1220,7 +1220,7 @@ class gui:
             outfile.write('echo "Sorting %s..."\n' % baseName)
             outfile.write('python $APP_DIR/sort.py --in %s --out $TMP_DIR/%s\n' % (f,baseName))
         # Throw out fields we explicitly decided we want to remove
-        if len(self.removedAttributes) > 0:
+        if not isCvf and len(self.removedAttributes) > 0:
             attsToRemove = " ".join(a.name for a in self.removedAttributes)
             outfile.write('echo "Cleaning..."\n')
             outfile.write('python $APP_DIR/cleanVCF.py --in $TMP_DIR/%s --out $TMP_DIR/temp_%s --max_strings 0 --remove_info %s\n' % (vcfPath,vcfPath,attsToRemove))
@@ -1279,9 +1279,9 @@ class gui:
                 outfile.write('python $APP_DIR/filterVCF.py --in $TMP_DIR/%s --out $TMP_DIR/temp_%s --expression $TMP_DIR/%s --columns %s\n' % (vcfPath,vcfPath,temp," ".join(f.columns)))
                 outfile.write('mv $TMP_DIR/temp_%s $TMP_DIR/%s\n' % (vcfPath,vcfPath))
         # Convert to .cvf or just copy the .vcf
-        outPath = self.window.outputPathField.text()
-        if outPath.strip().lower().endswith('cvf'):
-            outfile.write('python $APP_DIR/VCFtoCVF --in $TMP_DIR/%s --out %s --max_strings 0 --separate_info_fields' % (vcfPath,outPath))
+        if isCvf:
+            attsToRemove = " ".join(a.name for a in self.removedAttributes)
+            outfile.write('python $APP_DIR/VCFtoCVF --in $TMP_DIR/%s --out %s --max_strings 0 --separate_info_fields --ignore %s' % (vcfPath,outPath,attsToRemove))
         else:
             outfile.write('mv $TMP_DIR/%s %s\n' % (vcfPath,outPath))
         
@@ -1295,7 +1295,7 @@ class gui:
         if not os.path.exists(os.path.dirname(path)):
             os.remove(os.path.join(TMP_DIR,'tmpLogFile.sh'))    # make sure to delete the log file if we didn't really want to create it
         
-        return vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles
+        return vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)

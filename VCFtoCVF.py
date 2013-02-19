@@ -7,6 +7,11 @@ def run(args):
     separateInfoFields = args.separate_info_fields.strip().lower() == "true"
     countSeparate = args.count_separate.strip().lower() == "true"
     
+    ignoreFields = args.ignore_fields
+    if ignoreFields == None:
+        ignoreFields = []
+    ignoreFields = set(ignoreFields)
+    
     posLengthWarned = False
     allChrs = []
     positions = []
@@ -16,7 +21,6 @@ def run(args):
     infoFields = {"Ref/Alt":alleleColumn,"QUAL":qualColumn,"FILTER":filterColumn}
     # TODO: get the numeric ranges, all valid categorical values
     
-    print "Counting columns, ranges, values...",
     infile = open(args.infile,'r')
     for line in infile:
         line = line.strip()
@@ -30,6 +34,8 @@ def run(args):
                 if infoFields.has_key(newTag):
                     raise Exception("Duplicate INFO ID or use of reserved ID:\t%s" % newTag)
                 infoFields[newTag] = infoDetails(newTag, args.max_strings, countSeparate)
+                if newTag in ignoreFields:
+                    infoFields[newTag].maxedOut = True
             elif temp.startswith("##filter"):
                 newTag = line[temp.find("id=")+3:]
                 newTag = newTag[:newTag.find(',')]
@@ -144,6 +150,8 @@ if __name__ == '__main__':
                         help='When an INFO field has multiple comma-delimited values, split them into separate columns.')
     parser.add_argument('--count_separate', type=str, dest="count_separate", nargs="?", const="True", default="False",
                         help='If --separate_info_fields is supplied, this option will count each column\'s ranges and categorical values separately.')
+    parser.add_argument('--ignore', type=str, dest="ignore_fields", nargs="+",
+                        help='Flag specific columns as IGNORE; this overrides --max_strings.')
     
     args = parser.parse_args()
     run(args)
