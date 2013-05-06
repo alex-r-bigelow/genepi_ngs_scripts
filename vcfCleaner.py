@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-import sys, os, webbrowser, tempfile
+import sys, os, webbrowser, tempfile, shutil, traceback
 from collections import defaultdict
 from PySide.QtCore import Qt, QFile
 from PySide.QtUiTools import QUiLoader
-from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem, QTreeWidgetItem, QPushButton, QColor, QPalette
+from PySide.QtGui import QApplication, QFileDialog, QProgressDialog, QMessageBox, QComboBox, QTableWidgetItem, QTreeWidgetItem, QPushButton, QColor, QPalette, QBrush, QInputDialog, QLineEdit
 from genome_utils import genomeException, parsePopulations, MAX_INFO_STRINGS
 import sort,cleanVCF,calcStats,addBEDtoVCF,addCSVtoVCF,filterVCF,VCFtoCVF
 
@@ -40,7 +40,7 @@ LOG_HEADER = "#!/bin/bash\n" + \
              "#(http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Populations) for details.\n\n"
 
 # TODO: I will probably need to tweak this depending on the platform
-APP_DIR = ""
+APP_DIR = sys.path[0]
 
 TMP_DIR = tempfile.gettempdir() + "/VCF_Cleaner"
 temp = TMP_DIR
@@ -49,6 +49,15 @@ while os.path.exists(TMP_DIR):
     TMP_DIR = temp + str(dupNumber)
     dupNumber += 1
 os.makedirs(TMP_DIR)
+with open(os.path.join(TMP_DIR,'README.txt'),'wb') as readme:
+    readme.write("This is a temporary directory - if you\'re reading this there\'s a good chance VCF Cleaner was run on this machine and crashed somewhere in the middle. You may be able to " + \
+                 "salvage some of the run from these contents. If you don't care, feel free to throw this away (nothing will break).")
+    readme.close()
+
+PURGE_TMP_DIR = True
+ERROR_DETAILS = "This is the error Python gave me:\n\n%s\n\n" + \
+                "If you'd like help, copy this message and post it at https://github.com/yasashiku/genepi_ngs_scripts/issues\n\n" + \
+                "You may be able to salvage something by snooping in %s, but if you run again everything in there will be obliterated."
 
 class sample(object):
     def __init__(self, name, sourcePop):
@@ -191,7 +200,10 @@ class gui:
         infile.open(QFile.ReadOnly)
         self.window = self.loader.load(infile, None)
         infile.close()
-                
+        
+        self.validOutputFormats = set(['.vcf','.cvf'])
+        self.sourcePopBackground = QBrush(Qt.lightGray)
+        
         # data structures
         self.popButtonBag = set()   # I get some strange seg fault errors due to some pyside garbage collection bug... I need to keep a pointer to
                                     # buttons I create dynamically to avoid this
@@ -235,6 +247,8 @@ class gui:
         self.window.browseNonBiallelicButton.clicked.connect(self.browseNonBiallelic)
         self.window.nonBiallelicField.editingFinished.connect(self.globalEnable)
         
+        self.window.treeWidget.itemSelectionChanged.connect(self.renameEnable)
+        self.window.renameButton.clicked.connect(self.renamePop)
         self.window.createPopulationButton.clicked.connect(self.createPopulation)
         self.window.removePopOrSampleButton.clicked.connect(self.removePopOrSample)
         
@@ -246,6 +260,7 @@ class gui:
         self.window.includeAttributeList.itemSelectionChanged.connect(self.changeIncludeAttribute)
         self.window.removeAttributeButton.clicked.connect(self.removeAttributes)
         
+        self.window.cvfWarningLabel.hide()
         self.window.removeInfoList.itemSelectionChanged.connect(self.changeRemoveInfo)
         self.window.addInfoButton.clicked.connect(self.addInfo)
         
@@ -352,6 +367,8 @@ class gui:
             self.window.treeWidget.insertTopLevelItem(0,parent)
             if pop.source:
                 parent.setFlags(parent.flags() & Qt.ItemIsEnabled)
+                parent.setBackground(0,self.sourcePopBackground)
+                parent.setBackground(1,self.sourcePopBackground)
                 addSamplesToPopButton = QPushButton('Add Samples...')
                 self.popButtonBag.add(addSamplesToPopButton)    # a hack to keep a pointer to the button around... otherwise we seg fault
                 addSamplesToPopButton.setDisabled(True) # these are here just for decoration
@@ -360,8 +377,10 @@ class gui:
                     child = QTreeWidgetItem(parent)
                     child.setText(0,s.name)
                     child.setFlags(child.flags() & Qt.ItemIsEnabled)
+                    child.setBackground(0,self.sourcePopBackground)
+                    child.setBackground(1,self.sourcePopBackground)
             else:
-                parent.setFlags(parent.flags() | Qt.ItemIsEditable)
+                #parent.setFlags(parent.flags() | Qt.ItemIsEditable)
                 addSamplesToPopButton = QPushButton('Add Samples...')
                 self.popButtonBag.add(addSamplesToPopButton)    # a hack to keep a pointer to the button around... otherwise we seg fault
                 self.window.treeWidget.setItemWidget(parent,1,addSamplesToPopButton)
@@ -369,6 +388,35 @@ class gui:
                 for s in sorted(pop.samples):
                     child = QTreeWidgetItem(parent)
                     child.setText(0,s.globalName)
+    
+    def renameEnable(self):
+        pops = self.window.treeWidget.selectedItems()
+        if len(pops) == 1 and not isinstance(pops[0].parent(),QTreeWidgetItem):  # really i.parent() == None would make more sense but a PySide bug doesn't allow that comparison
+            popName = pops[0].text(0)
+            pop = self.populations[popName]
+            if popName not in self.kgpPops and not pop.source:
+                self.window.renameButton.setEnabled(True)
+            else:
+                self.window.renameButton.setEnabled(False)
+        else:
+            self.window.renameButton.setEnabled(False)
+    
+    def renamePop(self):
+        target = self.window.treeWidget.selectedItems()[0]
+        oldName = target.text(0)
+        newName,ok = QInputDialog.getText(self.window,u'Rename Population',u'Rename to:',QLineEdit.Normal,oldName)
+        if ok and len(newName) > 0:
+            if self.populations.has_key(newName):
+                m = QMessageBox()
+                m.setText("%s already exists." % newName)
+                m.setIcon(QMessageBox.Critical)
+                m.exec_()
+                return
+            self.populations[newName] = self.populations[oldName]
+            del self.populations[oldName]
+            self.populations[newName].name = newName
+            self.populations[newName].globalName = newName
+            self.updatePopLists()
     
     def globalEnable(self):
         allPathsValid = True
@@ -390,14 +438,21 @@ class gui:
                 self.window.vcfPathField.setPalette(self.defaultPalette)
             
         outputString = self.window.outputPathField.text()
+        outputExt = os.path.splitext(outputString)[1].lower()
         hasOutput = False
         self.window.outputPathField.setPalette(self.defaultPalette)
         if outputString != "":
-            if not os.path.exists(os.path.dirname(outputString)):
+            if not os.path.exists(os.path.dirname(outputString)) or outputExt not in self.validOutputFormats:
                 allPathsValid = False
                 self.window.outputPathField.setPalette(self.errorPalette)
             else:
                 hasOutput = True
+                if outputExt == '.cvf':
+                    self.window.removeAttrLabel.setText("Flag these columns as IGNORE:")
+                    self.window.cvfWarningLabel.show()
+                else:
+                    self.window.removeAttrLabel.setText("Remove these INFO attributes:")
+                    self.window.cvfWarningLabel.hide()
         
         logString = self.window.logPathField.text()
         hasLog = False
@@ -432,7 +487,7 @@ class gui:
         if hasOutput:
             self.window.saveErrorWidget.setEnabled(True)
             if errorString != "":
-                if not os.path.exists(os.path.dirname(errorString)):
+                if not os.path.exists(os.path.dirname(errorString)) or os.path.splitext(errorString)[1].lower() != outputExt:
                     allPathsValid = False
                     self.window.errorPathField.setPalette(self.errorPalette)
         else:
@@ -444,7 +499,7 @@ class gui:
         if hasOutput:
             self.window.saveNonBiallelicWidget.setEnabled(True)
             if nonBiallelicString != "":
-                if not os.path.exists(os.path.dirname(nonBiallelicString)):
+                if not os.path.exists(os.path.dirname(nonBiallelicString)) or os.path.splitext(nonBiallelicString)[1].lower() != outputExt:
                     allPathsValid = False
                     self.window.nonBiallelicField.setPalette(self.errorPalette)
         else:
@@ -503,7 +558,7 @@ class gui:
             if isinstance(attr,attribute):
                 name = attr.name
             else:
-                name = attr.targetPop + "_" + attr.function + "_" + ('ASC' if attr.ascending else 'DEC') + '_' + attr.backPop + ('_aH' if attr.revertHack else '')
+                name = attr.targetPop + "_" + attr.function + "_" + ('ASC' if attr.ascending else 'DEC') + '_' + attr.backPop + ('_rHack' if attr.revertHack else '')
             temp = name
             appendDigit = 2
             while temp in takenTags:
@@ -629,6 +684,7 @@ class gui:
         if newDir == '':
             return
         
+        self.kgpFiles = {}
         for i in xrange(22):
             self.kgpFiles['chr%i' % (i+1)] = None
         self.kgpFiles['chrX'] = None
@@ -636,16 +692,17 @@ class gui:
         for f in os.listdir(newDir):
             if 'genotypes.vcf' in f:
                 c = f[f.find('chr'):]
-                c = f[:f.find('.')]
+                c = c[:c.find('.')]
                 self.kgpFiles[c] = os.path.join(newDir,f)
         for c,f in self.kgpFiles.iteritems():
             if f == None:
                 newDir = ''
+                self.kgpFiles = {}
                 for i in xrange(22):
                     self.kgpFiles['chr%i' % (i+1)] = None
                 self.kgpFiles['chrX'] = None
                 m = QMessageBox()
-                m.setText("Couldn't find the %s .genotypes.vcf file" % c)
+                m.setText("Couldn't find the *%s*.genotypes.vcf* file" % c)
                 m.setIcon(QMessageBox.Critical)
                 m.exec_()
                 break
@@ -653,17 +710,9 @@ class gui:
         self.updatePopLists()
     
     def browseOutput(self):
-        fileName = QFileDialog.getSaveFileName(caption=u"Save file", filter=u"Variant Call File (*.vcf);;Tabular File (*.csv);;CompreheNGSive Variant File (*.cvf)")[0]
+        fileName = QFileDialog.getSaveFileName(caption=u"Save file", filter=u"Variant Call File (*.vcf);;CompreheNGSive Variant File (*.cvf)")[0]
         if fileName == '':
             return
-        e = os.path.splitext(fileName)[1].lower()
-        
-        if e == '.vcf':
-            self.window.removeAttrLabel.setText("Remove these INFO attributes:")
-        elif e == '.csv':
-            self.window.removeAttrLabel.setText("Remove these columns:")
-        elif e == '.cvf':
-            self.window.removeAttrLabel.setText("Flag these columns as IGNORE:")
                 
         if fileName == self.window.errorPathField.text() or fileName == self.window.nonBiallelicField.text() or fileName == self.window.vcfPathField.text():
             m = QMessageBox()
@@ -685,8 +734,6 @@ class gui:
         e = self.window.outputPathField.text().lower()
         if e.endswith('.vcf'):
             f = u"Variant Call File (*.vcf)"
-        elif e.endswith('.csv'):
-            f = u"Tabular File (*.csv)"
         elif e.endswith('.cvf'):
             f = u"CompreheNGSive Variant File (*.cvf)"
         
@@ -707,8 +754,6 @@ class gui:
         e = self.window.outputPathField.text().lower()
         if e.endswith('.vcf'):
             f = u"Variant Call File (*.vcf)"
-        elif e.endswith('.csv'):
-            f = u"Tabular File (*.csv)"
         elif e.endswith('.cvf'):
             f = u"CompreheNGSive Variant File (*.cvf)"
         
@@ -741,6 +786,11 @@ class gui:
                     del self.populations[i.text(0)]
             else:
                 # delete a sample from a population
+                # TODO: got a strange bug when removing an individual... eventually delete this test here
+                if not self.populations.has_key(i.parent().text(0)):
+                    print i.parent().text(0)
+                    print self.populations.keys()
+                    sys.exit(1)
                 if not self.populations[i.parent().text(0)].source:
                     self.populations[i.parent().text(0)].samples.discard(self.samples[i.text(0)])
         self.updatePopLists()
@@ -975,6 +1025,7 @@ class gui:
         self.window.reject()
     
     def run(self):
+        global PURGE_TMP_DIR
         validPaths,hasLog,hasOutput = self.globalEnable()
         if not validPaths:
             return
@@ -982,7 +1033,7 @@ class gui:
         # If there isn't a valid log path, we'll still dump one to a temp directory
         logPath = self.window.logPathField.text()
         outPath = self.window.outputPathField.text()
-        vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf = self.generateLogFile(logPath)
+        vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf,newPopFields = self.generateLogFile(logPath)
         
         # Run if we need to
         if hasOutput:
@@ -1002,7 +1053,7 @@ class gui:
             
             def tick():
                 if progress.wasCanceled():
-                    return False
+                    raise Exception('Cancel clicked.')
                 newValue = min(progress.maximum(),progress.value()+1)
                 progress.setValue(newValue)
                 return True
@@ -1010,15 +1061,24 @@ class gui:
             # Sort first
             tempTicks = 0
             for f in sourceFiles:
-                progress.setLabelText("Sorting %f...")
+                progress.setLabelText("Sorting %s..." % f)
                 progress.setValue(tempTicks)
                 
                 baseName = os.path.split(f)[1]
                 args = argObj()
                 args.infile = f
                 args.outfile = os.path.join(TMP_DIR,baseName)
-                if not sort.run(args,tick,TICKS_PER_PROCESS):
+                try:
+                    sort.run(args,tick,TICKS_PER_PROCESS)
+                except Exception, e:
                     progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
                     return
                 
                 tempTicks += TICKS_PER_PROCESS
@@ -1033,8 +1093,17 @@ class gui:
                 args.outfile = os.path.join(TMP_DIR,"temp_"+vcfPath)
                 args.max_strings = 0
                 args.remove_info = " ".join(a.name for a in self.removedAttributes)
-                if not cleanVCF.run(args):
+                try:
+                    cleanVCF.run(args)
+                except Exception, e:
                     progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
                     return
                 os.rename(os.path.join(TMP_DIR,"temp_" + vcfPath),os.path.join(TMP_DIR,vcfPath))
             
@@ -1048,6 +1117,11 @@ class gui:
                 args.outfile = os.path.join(TMP_DIR,"temp_"+vcfPath)
                 if not os.path.exists(logPath):
                     logPath = os.path.join(TMP_DIR,"tmpLogFile.sh")
+                dataPath = self.window.kgpPathField.text()
+                if dataPath != "":
+                    args.data = dataPath
+                else:
+                    args.data = None
                 args.popFile = logPath
                 args.calculate_AF = []
                 args.calculate_Carriage = []
@@ -1071,8 +1145,17 @@ class gui:
                             args.calculate_Samples_w_calls.append(calculation)
                         else:
                             raise Exception("Unknown Statistic: %s" % a.function)
-                if not calcStats.run(args,tick,TICKS_FOR_LONG_PROCESSES):
+                try:
+                    calcStats.run(args,tick,TICKS_FOR_LONG_PROCESSES)
+                except Exception, e:
                     progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
                     return
                 os.rename(os.path.join(TMP_DIR,"temp_" + vcfPath),os.path.join(TMP_DIR,vcfPath))
             
@@ -1089,8 +1172,17 @@ class gui:
                 args.bedfile = os.path.join(TMP_DIR,baseName)
                 args.names = [a.name for a in attribs]
                 
-                if not addBEDtoVCF.run(args):
+                try:
+                    addBEDtoVCF.run(args)
+                except Exception, e:
                     progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
                     return
                 os.rename(os.path.join(TMP_DIR,"temp_" + vcfPath),os.path.join(TMP_DIR,vcfPath))
                 
@@ -1121,8 +1213,17 @@ class gui:
                     else:
                         raise Exception('Unknown csv additionalText: %s' % str(a.additionalText))
                 
-                if not addCSVtoVCF.run(args):
+                try:
+                    addCSVtoVCF.run(args)
+                except Exception, e:
                     progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
                     return
                 os.rename(os.path.join(TMP_DIR,"temp_" + vcfPath),os.path.join(TMP_DIR,vcfPath))
                 
@@ -1148,7 +1249,18 @@ class gui:
                     args.expression = temp
                     args.columns = f.columns
                 
-                filterVCF.run(args)
+                try:
+                    filterVCF.run(args)
+                except Exception, e:
+                    progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
+                    return
                 os.rename(os.path.join(TMP_DIR,"temp_" + vcfPath),os.path.join(TMP_DIR,vcfPath))
                 
                 tempTicks += TICKS_PER_PROCESS
@@ -1167,8 +1279,20 @@ class gui:
                 args.separate_info_fields = "True"
                 args.count_separate = "False"
                 args.ignore = [a.name for a in self.removedAttributes]
+                args.ignore.extend(newPopFields)
                 
-                VCFtoCVF.run(args)
+                try:
+                    VCFtoCVF.run(args)
+                except Exception, e:
+                    progress.close()
+                    if e.message != 'Cancel clicked.':
+                        m = QMessageBox()
+                        m.setText("The run couldn't complete because of an error.")
+                        PURGE_TMP_DIR = False
+                        m.setDetailedText(ERROR_DETAILS % (traceback.format_exc(),TMP_DIR))
+                        m.setIcon(QMessageBox.Critical)
+                        m.exec_()
+                    return
             else:
                 os.rename(os.path.join(TMP_DIR,vcfPath),outPath)
             progress.close()
@@ -1186,10 +1310,14 @@ class gui:
         
         vcfPath = self.window.vcfPathField.text()
         outPath = self.window.outputPathField.text()
+        if outPath == "":
+            outPath = os.path.devnull
+            outfile.write('#***WARNING***: You didn\'t specify an output path in VCF Cleaner; you should replace %s with the place you want the resulting file to go.\n' % os.devnull)
         isCvf = outPath.strip().lower().endswith('cvf')
         
         sourceFiles = set()
         statsToCalculate = ""
+        newPopFields = set()
         bedAttribFiles = defaultdict(set)
         csvAttribFiles = defaultdict(set)
         for a in self.includedAttributes:
@@ -1203,13 +1331,19 @@ class gui:
             elif isinstance(a,statistic):
                 statStr = "--calculate_%s %s" % (a.function,a.targetPop)
                 if a.backPop != "ALT":
+                    backPop = str(a.backPop)
                     statStr += " %s" % a.backPop
                     if a.ascending == True:
+                        backPop += "_ASC"
                         statStr += " ASC"
                     else:
+                        backPop += "_DEC"
                         statStr += " DEC"
+                    backPop += "_AO"
                     if a.revertHack == True:
+                        backPop += "_rHack"
                         statStr += " True"
+                    newPopFields.add(backPop)
                 statsToCalculate += " %s" % statStr
         sourceFiles.add(vcfPath)
         vcfPath = os.path.split(vcfPath)[1]
@@ -1227,8 +1361,12 @@ class gui:
             outfile.write('mv $TMP_DIR/temp_%s $TMP_DIR/%s\n' % (vcfPath,vcfPath))
         # Run calcStats.py
         if len(statsToCalculate) > 1:
+            dataText = self.window.kgpPathField.text()
+            if dataText != "":
+                dataText = " --data " + dataText
+            outfile.write('#***WARNING*** You should either copy KGP_populations.txt to the same directory as this script or change "$0" to the path containing KGP_populations.txt\n')
             outfile.write('echo "Running calcStats.py..."\n')
-            outfile.write('python $APP_DIR/calcStats.py --in $TMP_DIR/%s --out $TMP_DIR/temp_%s --populations $0 %s%s\n' % (vcfPath,vcfPath,self.window.kgpPathField.text(),statsToCalculate))
+            outfile.write('python $APP_DIR/calcStats.py --in $TMP_DIR/%s --out $TMP_DIR/temp_%s --populations `dirname $0`/KGP_populations.txt%s%s\n' % (vcfPath,vcfPath,dataText,statsToCalculate))
             outfile.write('mv $TMP_DIR/temp_%s $TMP_DIR/%s\n' % (vcfPath,vcfPath))
         # Add any .bed stats
         for f,attribs in bedAttribFiles.iteritems():
@@ -1281,6 +1419,10 @@ class gui:
         # Convert to .cvf or just copy the .vcf
         if isCvf:
             attsToRemove = " ".join(a.name for a in self.removedAttributes)
+            if len(newPopFields) > 0:
+                if len(attsToRemove) > 0:
+                    attsToRemove += " "
+                attsToRemove += " ".join(newPopFields)
             outfile.write('python $APP_DIR/VCFtoCVF --in $TMP_DIR/%s --out %s --max_strings 0 --separate_info_fields --ignore %s' % (vcfPath,outPath,attsToRemove))
         else:
             outfile.write('mv $TMP_DIR/%s %s\n' % (vcfPath,outPath))
@@ -1295,9 +1437,12 @@ class gui:
         if not os.path.exists(os.path.dirname(path)):
             os.remove(os.path.join(TMP_DIR,'tmpLogFile.sh'))    # make sure to delete the log file if we didn't really want to create it
         
-        return vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf
+        return vcfPath,sourceFiles,statsToCalculate,bedAttribFiles,csvAttribFiles,isCvf,newPopFields
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = gui()
-    sys.exit(app.exec_())
+    exitCode = app.exec_()
+    if PURGE_TMP_DIR:
+        shutil.rmtree(TMP_DIR)
+    sys.exit(exitCode)

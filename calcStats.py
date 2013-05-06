@@ -114,7 +114,7 @@ def parseVcfHeader(path, outpath=None, popFile=""):
     # Essentially this pulls a lot of crap out of the vcf header, possibly in conjunction with a population file (see KGP_populations.txt or
     # a VCF Cleaner log file)
     if popFile != "":
-        populations = parsePopulations(args.popFile)[0]
+        populations = parsePopulations(popFile)[0]
     else:
         popName = os.path.split(path)[1]
         populations = {popName:[]}

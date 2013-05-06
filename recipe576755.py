@@ -52,8 +52,7 @@ def batch_sort(input, output, key=None, buffer_size=64000, tempdirs=None, tickFu
                 if input_file.tell() > nextTick:
                     nextTick += tickInterval
                     if tickFunction != None:
-                        if not tickFunction():
-                            raise Exception()
+                        tickFunction()
         nextTick = 0
         with open(output,'wb',64*1024) as output_file:
             for line in merge(key, *chunks):
@@ -61,21 +60,27 @@ def batch_sort(input, output, key=None, buffer_size=64000, tempdirs=None, tickFu
                 if output_file.tell() > nextTick:
                     nextTick += tickInterval
                     if tickFunction != None:
-                        if not tickFunction():
-                            try:
-                                output_file.close()
-                                os.remove(output)
-                            finally:
-                                raise Exception()
+                        tickFunction()
             output_file.writelines(merge(key, *chunks))
+    except Exception, e:
+        for chunk in chunks:
+            try:
+                chunk.close()
+                os.remove(chunk.name)
+            except:
+                pass
+        try:
+            output_file.close()
+            os.remove(output)
+        finally:
+            raise e
     finally:
         for chunk in chunks:
             try:
                 chunk.close()
                 os.remove(chunk.name)
-            except Exception:
+            except:
                 pass
-
 
 if __name__ == '__main__':
     import optparse
