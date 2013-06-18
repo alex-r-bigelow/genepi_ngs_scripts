@@ -44,3 +44,6 @@ A GUI front end to scripts that can manipulate/clean the results of the pipeline
 
 - VCFtoCVF.py:
   Converts a .vcf file to a .cvf file
+
+- VCFtoCSV.py:
+  Converts a .vcf file to a .csv file
