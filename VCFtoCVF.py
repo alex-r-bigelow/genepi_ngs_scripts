@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-import argparse, datetime, math, sys
-from genome_utils import standardizeChromosome, vcfLine, countingDict, infoDetails, MAX_INFO_STRINGS
+import argparse, datetime, sys
+from genome_utils import standardizeChromosome, vcfLine, infoDetails, MAX_INFO_STRINGS
 
 def run(args):
     
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Creates a .cvf file from the CHROM, POS, ID, REF, ALT, QUAL, FILTER, and INFO fields of a .vcf file')
     parser.add_argument('--in', type=str, dest="infile", required=True,
                         help='Path to .vcf file')
-    parser.add_argument('--out', type=str, dest="outfiles", required=True,
+    parser.add_argument('--out', type=str, dest="outfile", required=True,
                         help='Path to .cvf file')
     parser.add_argument('--max_strings', type=int, dest="max_strings", nargs="?", const=MAX_INFO_STRINGS, default=MAX_INFO_STRINGS,
                         help='Maximum number of strings a categorical INFO field can have before it\'s automatically marked as IGNORE. If zero or negative, no limit is enforced. Default is %i.' % MAX_INFO_STRINGS)

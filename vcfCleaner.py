@@ -955,8 +955,15 @@ class gui:
     
     # set up GUI - Variant Filters Tab
     def changeFilter(self):
-        f = self.variantFilters[self.window.filterList.currentRow()]
-        self.window.expressionField.setPlainText(f.expression % tuple(f.columns))
+        r = self.window.filterList.currentRow()
+        if r > len(self.variantFilters):
+            self.window.expressionField.setPlainText("")
+            return
+        f = self.variantFilters[r]
+        if isinstance(f,filterBed):
+            self.window.expressionField.setPlainText(f.expression % tuple(f.columns))
+        else:
+            self.window.expressionField.setPlainText("")
     def removeFilter(self):
         if self.window.filterList.count() == 0:
             return
