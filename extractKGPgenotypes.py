@@ -4,7 +4,7 @@ from genome_utils import kgpInterface, countingDict
 
 def run(args):
     kgp = kgpInterface(args.data,sys.path[0] + "/KGP_populations.txt")
-    outfile = open(args.outfile,'w')
+    outfile = open(args.outfile,'wb')
     freqOnly = args.frequencies_only.lower().startswith('t')
     
     wroteHeader = False
@@ -19,27 +19,27 @@ def run(args):
         line.extractChrAndPos()
         line.extractAlleles()
         line.extractGenotypes()
-        outfile.write([line.chromosome,str(line.position),line.name].join('\t'))
+        outfile.write('\t'.join([line.chromosome,str(line.position),line.name]))
         if freqOnly:
             counts = countingDict()
             total = 0.0
-            for p in people:
-                if line.genotypes[p][0] != None:
-                    counts[line.genotypes[p][0]] += 1
+            for i,p in enumerate(people):
+                if line.genotypes[i][0] != None:
+                    counts[line.genotypes[i][0]] += 1
                     total += 1.0
-                if line.genotypes[p][1] != None:
-                    counts[line.genotypes[p][1]] += 1
+                if line.genotypes[i][1] != None:
+                    counts[line.genotypes[i][1]] += 1
                     total += 1.0
             for i,c in counts.iteritems():
                 outfile.write('\t%s:\t%f' % (line.alleles[i],c/total))
         else:
-            for p in people:
-                a1 = line.genotypes[p][0]
+            for i,p in enumerate(people):
+                a1 = line.genotypes[i][0]
                 if a1 == None:
                     a1 = '.'
                 else:
                     a1 = line.alleles[a1]
-                a2 = line.genotypes[p][1]
+                a2 = line.genotypes[i][1]
                 if a2 == None:
                     a2 = '.'
                 else:

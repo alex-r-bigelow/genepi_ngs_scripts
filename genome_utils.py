@@ -448,7 +448,7 @@ class kgpInterface:
                 elif people == None:
                     continue
                 else:
-                    yield(line,people)
+                    yield(vcfLine(line.strip().split('\t')),people)
     
     def iterateVcf(self, vcfPath, tickFunction=None, numTicks=100):
         ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be
