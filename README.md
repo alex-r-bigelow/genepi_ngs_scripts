@@ -34,7 +34,7 @@ A GUI front end to scripts that can manipulate/clean the results of the pipeline
   Adds per-variant scores in a .csv file to every variant in a .vcf file; supports three modes for matching rows: exact match, nearest neighbor, and interpolation
 
 - calcStats.py:
-  Really does two things: creates [additional/alternate allele orderings](http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Calculating), and calculates additional statistics for those allele orders
+  Really does two things: creates [additional/alternate allele orderings](http://www.sci.utah.edu/~abigelow/index.php?showPage=projects/vcfCleaner/vcfCleanerHelp.php#MultipleAltAlleles), and calculates additional statistics for those allele orders
 
 - cleanVCF.ph:
   Removes INFO fields from a .vcf file with an excessive number of categorical values

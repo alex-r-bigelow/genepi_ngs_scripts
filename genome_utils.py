@@ -67,18 +67,18 @@ class countingDict(dict):
 
 class vcfLine:
     @staticmethod
-    def constructLine(chr,pos,id=".",alleles=["N","N"],info={},qual=0.0,filters=["."],format=["GT"],number_of_genotypes=0):
+    def constructLine(chromosome,position,name=".",alleles=["N","N"],info={},qual=0.0,filters=["."],format=["GT"],number_of_genotypes=0):
         temp = vcfLine([])
         
-        chr = standardizeChromosome(chr)
+        chromosome = standardizeChromosome(chromosome)
         temp.chromosome = chr
         temp.columns.append(chr)
         
-        temp.position = pos
-        temp.columns.append(str(pos))
+        temp.position = position
+        temp.columns.append(str(position))
         
-        temp.id = id
-        temp.columns.append(id)
+        temp.name = name
+        temp.columns.append(name)
         
         temp.alleles = alleles
         temp.columns.append(alleles[0])
@@ -118,7 +118,7 @@ class vcfLine:
         if not hasattr(self,'chromosome'):
             self.chromosome = standardizeChromosome(self.columns[0])
             self.position = int(self.columns[1])
-            self.id = self.columns[2]
+            self.name = self.columns[2]
     
     def extractAlleles(self):
         if not hasattr(self, 'alleles'):
@@ -234,8 +234,8 @@ class vcfLine:
         else:
             outline += self.columns[1] + '\t'
         
-        if hasattr(self,'id'):
-            outline += self.id + '\t'
+        if hasattr(self,'name'):
+            outline += self.name + '\t'
         else:
             outline += self.columns[2] + '\t'
         
@@ -299,7 +299,7 @@ class infoDetails:
         self.ranges = []    # nth column : (low,high) or None, indicating that the column exists, but there are no numerical values
         self.categories = []    # nth column : set(possible keys) or None, indicating that the column exists, but there are no strings
                 
-        self.id = id
+        self.name = id
         self.maxCategories = maxCategories
         self.countSeparate = countSeparate
         
@@ -358,9 +358,9 @@ class infoDetails:
         results = []
         for i in xrange(self.numColumns):
             if i == 0:
-                pragmaString = "#\t%s\t" % self.id
+                pragmaString = "#\t%s\t" % self.name
             else:
-                pragmaString = "#\t%s %i\t" % (self.id, i+1)
+                pragmaString = "#\t%s %i\t" % (self.name, i+1)
             
             if override != None:
                 pragmaString += override
@@ -414,6 +414,7 @@ class kgpInterface:
                         chrname = filename[filename.find("chr"):]
                         chrname = chrname[:chrname.find(".")]
                         fullpath = os.path.join(dirname,filename)
+                        assert chrname in chromosomeOrder
                         self.files[chrname]=gzip.open(fullpath,'rb')
             for line in self.files.itervalues().next(): # just grab one of the files
                 if line.startswith("#CHROM"):
@@ -430,6 +431,24 @@ class kgpInterface:
     def startAtZero(self):
         for f in self.files.itervalues():
             f.seek(0)
+    
+    def iterate(self):
+        self.startAtZero()
+        return self._iterate()
+    
+    def _iterate(self):
+        for c in chromosomeOrder:
+            if not self.files.has_key(c):
+                continue
+            people = None
+            for line in self.files[c]:
+                if line.startswith('#CHROM'):
+                    people = line.strip().split('\t')[9:]
+                    continue
+                elif people == None:
+                    continue
+                else:
+                    yield(line,people)
     
     def iterateVcf(self, vcfPath, tickFunction=None, numTicks=100):
         ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be

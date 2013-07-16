@@ -125,7 +125,7 @@ def run(args):
         line.info["QUAL"] = str(line.qual)
         line.extractFilters()
         line.info["FILTER"] = line.filters
-        outfile.write("%s\t%i\t%s" % (line.chromosome,line.position,line.id))
+        outfile.write("%s\t%i\t%s" % (line.chromosome,line.position,line.name))
         for f in fieldOrder:
             values = line.info[f]
             if isinstance(values,list):

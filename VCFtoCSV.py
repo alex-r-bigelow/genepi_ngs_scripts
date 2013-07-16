@@ -120,7 +120,7 @@ def run(args):
         line = vcfLine(line.split('\t'))
         
         line.extractChrAndPos()
-        outfile.write("%s\t%i\t%s" % (line.chromosome,line.position,line.id))
+        outfile.write("%s\t%i\t%s" % (line.chromosome,line.position,line.name))
         
         line.extractAlleles()
         outfile.write('\t%s' % line.alleles[0])

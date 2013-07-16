@@ -4,7 +4,7 @@ make sure the first line of data begins with a #, followed by a tab. Every line 
 commands. VCF Cleaner uses this mechanism to store all custom populations, as well as a command-line executable script, in the same
 file. Note that you should never use any of these group names for your own data!
 
-See http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Populations for more details
+See http://www.sci.utah.edu/~abigelow/index.php?showPage=projects/vcfCleaner/vcfCleanerHelp.php#Populations for more details
 
 #	kALL	kAFR	kAMR	kASN	kEUR	kASW	kCEU	kCHB	kCHS	kCLM	kFIN	kGBR	kIBS	kJPT	kLWK	kMXL	kPUR	kTSI	kYRI
 #	HG00096	NA18486	HG00553	HG00403	HG00096	NA19625	NA06984	NA18525	HG00403	HG01112	HG00171	HG00096	HG01515	NA18939	NA19020	NA19648	HG00553	NA20502	NA18486

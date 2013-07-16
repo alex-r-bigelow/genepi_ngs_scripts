@@ -37,7 +37,7 @@ LOG_HEADER = "#!/bin/bash\n" + \
              "#the scripts, and TMP_DIR should point to an empty directory to store temporary files).\n" + \
              "#This file also serves as a population file that can be used as a parameter to calcStats.py. If you tweak this file, just be sure\n" + \
              "#that you don't start any comments with #tab, as that indicates population data - see the VCF Cleaner help page\n" + \
-             "#(http://sci.utah.edu/~abigelow/vcfCleanerHelp.php#Populations) for details.\n\n"
+             "#(http://www.sci.utah.edu/~abigelow/index.php?showPage=projects/vcfCleaner/vcfCleanerHelp.php#Populations) for details.\n\n"
 
 # TODO: I will probably need to tweak this depending on the platform
 APP_DIR = sys.path[0]
@@ -1026,7 +1026,7 @@ class gui:
             self.updateFilterList()
     
     def openHelpPage(self):
-        webbrowser.open('http://sci.utah.edu/~abigelow/vcfCleanerHelp.php',new=2)
+        webbrowser.open('http://www.sci.utah.edu/~abigelow/index.php?showPage=projects/vcfCleaner/vcfCleanerHelp.php',new=2)
     
     def quit(self):
         self.window.reject()

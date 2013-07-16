@@ -58,7 +58,7 @@ def run(args):
                     expArgs.append(line.position)
                 elif c == "ID":
                     line.extractChrAndPos()
-                    expArgs.append(line.id)
+                    expArgs.append(line.name)
                 elif c == "QUAL":
                     line.extractQual()
                     expArgs.append(line.qual)
