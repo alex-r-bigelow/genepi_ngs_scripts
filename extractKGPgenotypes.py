@@ -8,11 +8,11 @@ def run(args):
     freqOnly = args.frequencies_only.lower().startswith('t')
     
     wroteHeader = False
-    for line,people in kgp.iterate():
+    for line in kgp.iterate():
         if not wroteHeader:
             outfile.write('CHROM\tPOS\tID')
             if not freqOnly:
-                for p in people:
+                for p in kgp.populations[args.pop]:
                     outfile.write('\t%s_1\t%s_2' % (p,p))
             outfile.write('\n')
             wroteHeader = True
@@ -23,7 +23,8 @@ def run(args):
         if freqOnly:
             counts = countingDict()
             total = 0.0
-            for i,p in enumerate(people):
+            for p in kgp.populations[args.pop]:
+                i = kgp.individualIndices[p]
                 if line.genotypes[i][0] != None:
                     counts[line.genotypes[i][0]] += 1
                     total += 1.0
@@ -33,7 +34,8 @@ def run(args):
             for i,c in counts.iteritems():
                 outfile.write('\t%s:\t%f' % (line.alleles[i],c/total))
         else:
-            for i,p in enumerate(people):
+            for p in kgp.populations[args.pop]:
+                i = kgp.individualIndices[p]
                 a1 = line.genotypes[i][0]
                 if a1 == None:
                     a1 = '.'

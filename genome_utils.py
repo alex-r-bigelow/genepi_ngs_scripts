@@ -405,6 +405,7 @@ class kgpInterface:
         '''
         self.populations = parsePopulations(popPath)[0]
         self.populationIndices = {}
+        self.individualIndices = {}
         self.files = {}
         if dataPath != None:
             self.valid = True
@@ -419,10 +420,12 @@ class kgpInterface:
             for line in self.files.itervalues().next(): # just grab one of the files
                 if line.startswith("#CHROM"):
                     self.header = line.strip().split('\t')
+                    for i,h in enumerate(self.header[9:]):
+                        self.individualIndices[h] = i
                     for p,individuals in self.populations.iteritems():
                         self.populationIndices[p] = []
                         for i in individuals:
-                            self.populationIndices[p].append(self.header.index(i)-9)
+                            self.populationIndices[p].append(self.individualIndices[i])
                     break
             self.startAtZero()
         else:
@@ -440,15 +443,15 @@ class kgpInterface:
         for c in chromosomeOrder:
             if not self.files.has_key(c):
                 continue
-            people = None
+            passedHeader = False
             for line in self.files[c]:
                 if line.startswith('#CHROM'):
-                    people = line.strip().split('\t')[9:]
+                    passedHeader = True
                     continue
-                elif people == None:
+                elif not passedHeader:
                     continue
                 else:
-                    yield(vcfLine(line.strip().split('\t')),people)
+                    yield vcfLine(line.strip().split('\t'))
     
     def iterateVcf(self, vcfPath, tickFunction=None, numTicks=100):
         ''' Useful for iterating through a sorted .vcf file and finding matches in KGP; the vcf file should be
