@@ -74,13 +74,13 @@ def run(args):
                 passedBed = False
                 line.extractChrAndPos()
                 for bed in bedRegions:
-                    if bed.contains(line.position):
+                    if bed.contains(line.chromosome, line.position):
                         passedBed = True
                         break
                 if not passedBed:
                     if failfile != None:
                         failfile.write(str(line))
-                        continue
+                    continue
             
             exp = expression % tuple(expArgs)
             try:

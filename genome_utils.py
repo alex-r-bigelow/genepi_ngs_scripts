@@ -522,8 +522,8 @@ class bedLine:
         if len(self.columns) > 4:
             self.score = float(self.columns[4])
     
-    def contains(self, position):
-        return position >= self.start and position < self.stop
+    def contains(self, chromosome, position):
+        return chromosome == self.chromosome and position >= self.start and position < self.stop
     
     def __repr__(self):
         outline = "%s\t%i\t%i" % (self.chromosome,self.start-1,self.stop-1)

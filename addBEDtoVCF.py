@@ -56,7 +56,7 @@ def run(args):
             line.extractChrAndPos()
             
             for b in bedRegions:
-                if b.contains(line.position):
+                if b.contains(line.chromosome, line.position):
                     line.extractInfo()
                     line.info[b.name] = str(b.score)
             
